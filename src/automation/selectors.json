@@ -19,9 +19,8 @@
       "[data-testid=\"file-thumbnail\"]"
     ],
     "uploadBusySelectors": [
-      "[data-testid=\"file-thumbnail\"] [role=\"progressbar\"]",
-      "[data-testid=\"file-thumbnail\"] [class*=\"animate-spin\"]",
-      "[data-testid=\"file-thumbnail\"] [class*=\"animate-pulse\"]"
+      "[data-testid=\"file-thumbnail\"][aria-busy=\"true\"]",
+      "[data-testid=\"file-thumbnail\"][data-state=\"pending\"]"
     ]
   },
   "grok": {
@@ -45,10 +44,11 @@
     "attachmentSelectors": [
       "[aria-label=\"Conversation attachments\"] [role=\"listitem\"]"
     ],
-    "uploadBusySelectors": [
-      "[aria-label=\"Conversation attachments\"] [role=\"progressbar\"]",
-      "[aria-label=\"Conversation attachments\"] [class*=\"animate-spin\"]"
-    ]
+    "uploadBusySelectors": [],
+    "uploadBusyText": {
+      "selector": "[aria-label=\"Conversation attachments\"] [role=\"listitem\"]",
+      "pattern": "Uploading|Processing"
+    }
   },
   "gemini": {
     "inputType": "contenteditable",

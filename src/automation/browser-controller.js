@@ -1,6 +1,7 @@
 'use strict';
 
 const selectors = require('./selectors.json');
+const fs = require('fs');
 const path = require('path');
 const { log } = require('../utils/logger.js');
 
@@ -192,6 +193,8 @@ class BrowserController {
     if (attachedHere) dbg.attach('1.3');
     try {
       const before = await this.countAttachments();
+      const totalBytes = paths.reduce((sum, p) => sum + fs.statSync(p).size, 0);
+      log('info', `${this.aiName}: Uploading ${paths.length} file(s), ${(totalBytes / 1e6).toFixed(1)} MB`);
       for (const file of paths) {
         let input = await this._findFileInput(dbg, file);
         let menuOpen = false;
@@ -209,7 +212,7 @@ class BrowserController {
         log('info', `${this.aiName}: Attached ${path.basename(file)}`);
         await this._wait(500);
       }
-      await this.waitForAttachments(before, paths.length);
+      await this.waitForAttachments(before, paths.length, totalBytes);
       log('info', `${this.aiName}: Attachment upload finished`);
     } finally {
       if (attachedHere) {
@@ -275,7 +278,12 @@ class BrowserController {
   // Wait for the attachment chips to appear, then for any upload spinner in
   // them to clear. Sending before the upload finishes either fails or sends
   // the question without the file, and the member answers blind.
-  async waitForAttachments(before, count, timeoutMs = 60000) {
+  // Large files take minutes: a 29 MB PDF took ~100-130s on every site at
+  // ~0.3 MB/s upload, so allow 60s plus 10s per MB (capped at 15 min).
+  // Busy state is either an element (uploadBusySelectors) or chip text
+  // such as Grok's "Uploading 37%" (uploadBusyText).
+  async waitForAttachments(before, count, totalBytes = 0) {
+    const timeoutMs = Math.min(60000 + (totalBytes / 1e6) * 10000, 15 * 60000);
     const deadline = Date.now() + timeoutMs;
     if (this.config.attachmentSelectors) {
       while ((await this.countAttachments()) < before + count) {
@@ -284,10 +292,18 @@ class BrowserController {
       }
     }
     const busy = this.config.uploadBusySelectors || [];
+    const busyText = this.config.uploadBusyText || null;
     await this._wait(1500);
-    while (busy.length > 0) {
+    while (busy.length > 0 || busyText) {
       const uploading = await this.webContents.executeJavaScript(
-        `${JSON.stringify(busy)}.some(function(s) { return !!document.querySelector(s); })`
+        `(function() {` +
+        `  if (${JSON.stringify(busy)}.some(function(s) { return !!document.querySelector(s); })) return true;` +
+        `  var bt = ${JSON.stringify(busyText)};` +
+        `  if (!bt) return false;` +
+        `  var els = document.querySelectorAll(bt.selector);` +
+        `  for (var i = 0; i < els.length; i++) if (new RegExp(bt.pattern, 'i').test(els[i].innerText)) return true;` +
+        `  return false;` +
+        `})()`
       ).catch(() => false);
       if (!uploading) break;
       if (Date.now() > deadline) throw new Error(`${this.aiName}: attachment upload did not finish`);

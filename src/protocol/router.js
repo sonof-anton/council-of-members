@@ -3,13 +3,21 @@
 const { EventEmitter } = require('events');
 const fs = require('fs');
 const path = require('path');
-const { AI_NAMES, MAX_ROUNDS, MIN_CONSENSUS_MEMBERS, PHASES, RESPONSE_TIMEOUT_MS, RESPONSE_TIMEOUT_PER_MEMBER } = require('../utils/constants.js');
+const { AI_NAMES, MAX_ROUNDS, MIN_CONSENSUS_MEMBERS, PHASES, RESPONSE_TIMEOUT_MS, RESPONSE_TIMEOUT_PER_MEMBER, TX_TIMEOUT_MS, ATTACH_TIMEOUT_MS } = require('../utils/constants.js');
 const { formatInitialMessage, formatRelayMessage, formatUnificationMessage } = require('./message-formatter.js');
 const { parseResponse } = require('./message-parser.js');
 const { checkConsensus } = require('./consensus-detector.js');
 const SessionState = require('./session-state.js');
 const ResponseExtractor = require('../automation/response-extractor.js');
 const PerfTracker = require('../utils/perf-tracker.js');
+
+function withTimeout(promise, ms, what) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`${what} timed out after ${Math.round(ms / 1000)}s`)), ms); })
+  ]).finally(() => clearTimeout(timer));
+}
 const { log } = require('../utils/logger.js');
 
 class Router extends EventEmitter {
@@ -19,6 +27,7 @@ class Router extends EventEmitter {
     this.extractors = {};
     this.state = new SessionState();
     this.disabledAIs = new Set(); // AIs that failed and should be skipped
+    this.txTimeoutMs = TX_TIMEOUT_MS;
     this.waitingMembers = new Set(); // Members with extended/indefinite timeout
     this.skipResolvers = new Map(); // resolve functions for skip support
     this.tickInterval = null;
@@ -233,9 +242,9 @@ class Router extends EventEmitter {
       try {
         if (files.length > 0) {
           this.emitLog(name, `.TX attaching ${files.length} file(s)...`);
-          await this.extractors[name].controller.attachFiles(files);
+          await withTimeout(this.extractors[name].controller.attachFiles(files), ATTACH_TIMEOUT_MS, 'upload');
         }
-        await this.extractors[name].controller.sendMessage(message);
+        await withTimeout(this.extractors[name].controller.sendMessage(message), this.txTimeoutMs, 'typing/sending');
         this.txTimes[name] = Date.now();
         this.logTx(name, this.state.round, message);
         this.emitAiStatus(name, 'WAITING', null);

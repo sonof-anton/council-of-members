@@ -96,6 +96,26 @@ describe('Router', () => {
     assert.ok(result.answer.includes('A complete answer.'));
   });
 
+  it('drops a member whose tab hangs while typing instead of stalling the session', async () => {
+    const { router, controllers } = makeRouter({
+      claude: [GOOD('NO'), GOOD('YES'), GOOD('YES')],
+      grok: [GOOD('NO'), GOOD('YES'), GOOD('YES')],
+      gemini: [GOOD('NO')]
+    });
+    router.txTimeoutMs = 50;
+    let geminiSends = 0;
+    controllers.gemini.sendMessage = async () => {
+      if (++geminiSends > 1) return new Promise(() => {}); // frozen tab from round 2 on
+    };
+    const result = await Promise.race([
+      router.run('test question'),
+      new Promise((resolve) => setTimeout(() => resolve('still running'), 3000))
+    ]);
+    assert.notEqual(result, 'still running');
+    assert.ok(router.disabledAIs.has('gemini'));
+    assert.equal(result.success, true);
+  });
+
   it('abort ends a round that is still waiting on members', async () => {
     const { router } = makeRouter({
       claude: ['hang'],

@@ -87,6 +87,12 @@
       // composer. Keep the disk path; the data URL covers files without one.
       var filePath = '';
       try { filePath = window.council.getFilePath(file) || ''; } catch (err) { /* no path */ }
+      if (filePath) {
+        // Only the path is sent, so skip reading a large manual into memory
+        attachedFiles.push({ name: file.name, content: null, type: 'binary', size: file.size, path: filePath });
+        renderFileList();
+        return;
+      }
       reader.onload = function (e) {
         attachedFiles.push({ name: file.name, content: e.target.result, type: 'binary', size: file.size, path: filePath });
         renderFileList();

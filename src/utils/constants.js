@@ -26,6 +26,13 @@ const MAX_ROUNDS = 10;
 // A lone member agreeing with itself is not a council consensus
 const MIN_CONSENSUS_MEMBERS = 2;
 const POLL_INTERVAL_MS = 500;
+// Typing + clicking send into one member. A frozen tab never settles its
+// executeJavaScript/insertText calls (seen on Gemini right after a 36 MB
+// upload), which would otherwise stall the whole session.
+const TX_TIMEOUT_MS = 120000;
+// Upload waits scale with file size up to 15 min (BrowserController)
+const ATTACH_TIMEOUT_MS = 16 * 60000;
+
 const RESPONSE_TIMEOUT_MS = 180000;
 
 // Per-member timeouts — Gemini's deep-thinking mode regularly exceeds 180s
@@ -69,6 +76,8 @@ module.exports = {
   MIN_CONSENSUS_MEMBERS,
   POLL_INTERVAL_MS,
   RESPONSE_TIMEOUT_MS,
+  TX_TIMEOUT_MS,
+  ATTACH_TIMEOUT_MS,
   RESPONSE_TIMEOUT_PER_MEMBER,
   END_MARKER,
   VOTE_YES,
