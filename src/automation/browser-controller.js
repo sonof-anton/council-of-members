@@ -197,17 +197,14 @@ class BrowserController {
       log('info', `${this.aiName}: Uploading ${paths.length} file(s), ${(totalBytes / 1e6).toFixed(1)} MB`);
       for (const file of paths) {
         let input = await this._findFileInput(dbg, file);
-        let menuOpen = false;
         if (!input && this.config.uploadMenuSelectors) {
-          menuOpen = await this._clickUploadMenu(dbg);
-          await this._wait(1000);
-          input = await this._findFileInput(dbg, file);
+          input = await this._openMenuAndFindInput(dbg, file);
         }
         try {
           if (!input) throw new Error(`${this.aiName}: no upload input accepts ${path.basename(file)}`);
           await dbg.sendCommand('DOM.setFileInputFiles', { files: [file], objectId: input });
         } finally {
-          if (menuOpen) await this._clickUploadMenu(dbg); // the button toggles the menu shut
+          if (this.config.uploadMenuSelectors) await this._closeUploadMenu(dbg);
         }
         log('info', `${this.aiName}: Attached ${path.basename(file)}`);
         await this._wait(500);
@@ -245,6 +242,38 @@ class BrowserController {
         `})()`
     });
     return result && result.objectId ? result.objectId : null;
+  }
+
+  // The menu may close by itself once a file is chosen, so toggling its
+  // button to close it can reopen it instead and throw later files out of
+  // step. Open with a click and poll for the input; close with Escape,
+  // which never reopens it.
+  async _openMenuAndFindInput(dbg, file) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await this._clickUploadMenu(dbg);
+      for (let i = 0; i < 8; i++) {
+        await this._wait(250);
+        const input = await this._findFileInput(dbg, file);
+        if (input) return input;
+      }
+      await this._closeUploadMenu(dbg);
+    }
+    return null;
+  }
+
+  async _closeUploadMenu(dbg) {
+    for (let i = 0; i < 4; i++) {
+      const open = await this.webContents.executeJavaScript(
+        `document.querySelectorAll('input[type="file"]').length > 0`
+      ).catch(() => false);
+      if (!open) return;
+      for (const type of ['keyDown', 'keyUp']) {
+        await dbg.sendCommand('Input.dispatchKeyEvent', {
+          type, key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27
+        }).catch(() => {});
+      }
+      await this._wait(300);
+    }
   }
 
   async _clickUploadMenu(dbg) {
