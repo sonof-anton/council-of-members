@@ -342,7 +342,7 @@ class Router extends EventEmitter {
 
     const responded = active.filter(name => {
       const r = this.state.currentResponses[name];
-      return r && !r.startsWith('[ERROR:');
+      return r && !r.startsWith('[ERROR:') && !r.startsWith('[SKIPPED');
     });
 
     this.emitLog('CouncilOfMembers', `Collected ${responded.length}/${active.length} responses`);

@@ -132,6 +132,13 @@ class DomMonitor {
                 log('info', `${aiName}: Response stable (${text.length} chars)`);
                 return text;
               } else {
+                // The site's own failure reply ("I seem to be encountering an
+                // error...") is short and stable too — waiting the full
+                // timeout on it just stalls the round.
+                const siteError = this.controller.detectSiteError && this.controller.detectSiteError(text);
+                if (siteError) {
+                  throw new Error(`${aiName}: site returned an error: ${siteError}`);
+                }
                 // Too short — likely an intermediate status or loading indicator.
                 // Emit as a "thought" so the UI can display it, but keep waiting.
                 log('warn', `${aiName}: Ignoring short stable text (${text.length} chars): ${text.substring(0, 80)}`);

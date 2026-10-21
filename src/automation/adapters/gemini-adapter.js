@@ -70,6 +70,13 @@ class GeminiAdapter extends BrowserController {
     ).catch(() => 0);
   }
 
+  // Gemini's canned failure replies — returned in place of an answer when its
+  // backend errors out. Returns the matched message, or null.
+  detectSiteError(text) {
+    const m = (text || '').match(/I seem to be encountering an error[^\n]*|Something went wrong[^\n]*|I'm having a hard time fulfilling your request[^\n]*/i);
+    return m ? m[0].trim() : null;
+  }
+
   async getLastResponseText() {
     // Try configured selectors first
     const text = await this._primaryResponseText();

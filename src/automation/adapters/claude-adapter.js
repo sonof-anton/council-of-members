@@ -51,7 +51,9 @@ class ClaudeAdapter extends BrowserController {
       `  }` +
       // Fallback: use the whole article with aggressive stripping
       `  var clone = article.cloneNode(true);` +
-      `  var removes = clone.querySelectorAll('button, [role="toolbar"], [data-testid*="action"], time, [class*="timestamp"], [class*="reaction"], [class*="avatar"], [class*="sr-only"], [class*="source"], [class*="citation"], [class*="footnote"]');` +
+      // group/status holds the collapsed thinking summary ("Verifying claims
+      // about...") that otherwise gets glued onto the front of "ANSWER:"
+      `  var removes = clone.querySelectorAll('button, [role="toolbar"], [data-testid*="action"], time, [class*="timestamp"], [class*="reaction"], [class*="avatar"], [class*="sr-only"], [class*="source"], [class*="citation"], [class*="footnote"], [class*="group/status"]');` +
       `  for (var i = 0; i < removes.length; i++) removes[i].remove();` +
       `  return clone.innerText.trim();` +
       `})()`
