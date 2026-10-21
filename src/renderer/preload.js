@@ -1,9 +1,11 @@
 'use strict';
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('council', {
-  sendPrompt: (prompt) => ipcRenderer.invoke('council:send-prompt', prompt),
+  sendPrompt: (prompt, files) => ipcRenderer.invoke('council:send-prompt', prompt, files),
+  // Real disk path of a dropped/picked File ('' if it has none)
+  getFilePath: (file) => webUtils.getPathForFile(file),
   abort: () => ipcRenderer.invoke('council:abort'),
   setLevel: (level) => ipcRenderer.invoke('council:set-level', level),
   getState: () => ipcRenderer.invoke('council:get-state'),

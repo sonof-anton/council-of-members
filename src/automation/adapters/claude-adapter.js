@@ -45,7 +45,7 @@ class ClaudeAdapter extends BrowserController {
       `  if (responseDiv) {` +
       `    var clone = responseDiv.cloneNode(true);` +
       // Strip any citation/source elements that may be inside the response
-      `    var removes = clone.querySelectorAll('[class*="source"], [class*="citation"], [class*="footnote"], [data-testid*="source"], [data-testid*="citation"]');` +
+      `    var removes = clone.querySelectorAll('[class*="source"], [class*="citation"], [class*="footnote"], [data-testid*="source"], [data-testid*="citation"], .katex-mathml');` +
       `    for (var i = 0; i < removes.length; i++) removes[i].remove();` +
       `    return clone.innerText.trim();` +
       `  }` +
@@ -53,7 +53,7 @@ class ClaudeAdapter extends BrowserController {
       `  var clone = article.cloneNode(true);` +
       // group/status holds the collapsed thinking summary ("Verifying claims
       // about...") that otherwise gets glued onto the front of "ANSWER:"
-      `  var removes = clone.querySelectorAll('button, [role="toolbar"], [data-testid*="action"], time, [class*="timestamp"], [class*="reaction"], [class*="avatar"], [class*="sr-only"], [class*="source"], [class*="citation"], [class*="footnote"], [class*="group/status"]');` +
+      `  var removes = clone.querySelectorAll('button, [role="toolbar"], [data-testid*="action"], time, [class*="timestamp"], [class*="reaction"], [class*="avatar"], [class*="sr-only"], [class*="source"], [class*="citation"], [class*="footnote"], [class*="group/status"], .katex-mathml');` +
       `  for (var i = 0; i < removes.length; i++) removes[i].remove();` +
       `  return clone.innerText.trim();` +
       `})()`

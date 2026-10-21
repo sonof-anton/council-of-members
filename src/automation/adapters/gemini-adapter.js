@@ -100,7 +100,8 @@ class GeminiAdapter extends BrowserController {
   // Like the base implementation, but strips inline source chips: Gemini
   // renders citations as <sources-carousel-inline>/<source-inline-chip>
   // buttons inside the answer, whose labels ("SSD Nodes", "GitHub", "+ 1")
-  // otherwise land mid-sentence in the captured text.
+  // otherwise land mid-sentence in the captured text. Also drops KaTeX's
+  // hidden MathML copy of each formula (see BrowserController).
   async _primaryResponseText() {
     const selector = await this.findSelector(this.config.responseSelectors);
     if (!selector) return null;
@@ -109,7 +110,7 @@ class GeminiAdapter extends BrowserController {
       `  var els = document.querySelectorAll(${this._safeStringify(selector)});` +
       `  if (els.length === 0) return null;` +
       `  var clone = els[els.length - 1].cloneNode(true);` +
-      `  var chips = clone.querySelectorAll('sources-carousel-inline, source-inline-chip, [class*="source-inline-chip"]');` +
+      `  var chips = clone.querySelectorAll('sources-carousel-inline, source-inline-chip, [class*="source-inline-chip"], .katex-mathml');` +
       `  for (var i = 0; i < chips.length; i++) chips[i].remove();` +
       // innerText needs layout; a detached clone falls back to textContent
       // semantics, so attach it off-screen while reading.

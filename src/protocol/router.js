@@ -68,7 +68,9 @@ class Router extends EventEmitter {
     this.writeTranscript(`\n--- .RX ← ${aiName.toUpperCase()} (Round ${round}) ---\n${response}\n`);
   }
 
-  async run(prompt) {
+  // options.files: local paths uploaded to each member with the round 1
+  // message only — later rounds are in the same chat, so they still see it.
+  async run(prompt, options = {}) {
     this.state.reset();
     this.disabledAIs.clear();
     this.waitingMembers.clear();
@@ -87,7 +89,7 @@ class Router extends EventEmitter {
 
       // Capture response counts BEFORE sending so we know the baseline
       const countsBefore = await this.captureResponseCounts();
-      const sent1 = await this.sendToAll(initialMsg);
+      const sent1 = await this.sendToAll(initialMsg, options.files || []);
       await this.collectAll(countsBefore, sent1);
 
       // Round 1: NEVER accept consensus — members haven't seen each other yet
@@ -215,7 +217,7 @@ class Router extends EventEmitter {
     }
   }
 
-  async sendToAll(message) {
+  async sendToAll(message, files = []) {
     this.state.phase = this.unifying ? PHASES.UNIFYING : PHASES.TRANSMITTING;
     this.emitPhase();
 
@@ -229,6 +231,10 @@ class Router extends EventEmitter {
       this.emitAiStatus(name, 'TRANSMITTING', null);
       this.emitLog(name, '.TX typing...');
       try {
+        if (files.length > 0) {
+          this.emitLog(name, `.TX attaching ${files.length} file(s)...`);
+          await this.extractors[name].controller.attachFiles(files);
+        }
         await this.extractors[name].controller.sendMessage(message);
         this.txTimes[name] = Date.now();
         this.logTx(name, this.state.round, message);

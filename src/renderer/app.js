@@ -83,9 +83,12 @@
       };
       reader.readAsText(file);
     } else {
-      // For binary files, store the path info so it can be dropped into browser views
+      // Binary files (images, PDFs) are uploaded into each member's own
+      // composer. Keep the disk path; the data URL covers files without one.
+      var filePath = '';
+      try { filePath = window.council.getFilePath(file) || ''; } catch (err) { /* no path */ }
       reader.onload = function (e) {
-        attachedFiles.push({ name: file.name, content: e.target.result, type: 'binary', size: file.size });
+        attachedFiles.push({ name: file.name, content: e.target.result, type: 'binary', size: file.size, path: filePath });
         renderFileList();
       };
       reader.readAsDataURL(file);
@@ -134,7 +137,7 @@
         parts.push('=== END FILE ===');
       } else {
         parts.push('');
-        parts.push('[Binary file attached: ' + f.name + ' (' + f.size + ' bytes)]');
+        parts.push('[File uploaded with this message: ' + f.name + ']');
       }
     });
     return parts.join('\n');
@@ -156,6 +159,9 @@
     if (!prompt || busy) return;
 
     var fullPrompt = buildPromptWithFiles(prompt);
+    var uploads = attachedFiles.filter(function (f) { return f.type === 'binary'; }).map(function (f) {
+      return f.path ? { name: f.name, path: f.path } : { name: f.name, dataUrl: f.content };
+    });
 
     busy = true;
     currentRound = 0;
@@ -173,7 +179,7 @@
     document.getElementById('consensus-area').classList.remove('visible');
     document.getElementById('level-1').classList.remove('has-consensus');
 
-    window.council.sendPrompt(fullPrompt).then(function (result) {
+    window.council.sendPrompt(fullPrompt, uploads).then(function (result) {
       if (!result.success) {
         showStatus('NACK: ' + result.reason, 'error');
       }

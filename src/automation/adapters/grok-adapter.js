@@ -25,6 +25,8 @@ class GrokAdapter extends BrowserController {
     while (lines.length > 0) {
       const line = lines[0].trim();
       if (!line) { lines.shift(); continue; }
+      // Bare "Grok" speaker label shown above the status line
+      if (/^Grok$/i.test(line)) { lines.shift(); continue; }
       if (/^Worked/i.test(line) && line.length < 80) { lines.shift(); continue; }
       // Strip any short leading line that starts with a gerund (thinking indicator)
       if (/^[A-Z][a-z]+ing\b/i.test(line) && line.length < 80) { lines.shift(); continue; }

@@ -2,6 +2,7 @@
 
 const { ipcMain } = require('electron');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { AI_NAMES } = require('../utils/constants.js');
 const ClaudeAdapter = require('../automation/adapters/claude-adapter.js');
@@ -74,9 +75,15 @@ function registerIpcHandlers(mainWindow, windowManager) {
     return router;
   }
 
-  ipcMain.handle('council:send-prompt', async (_event, prompt) => {
+  ipcMain.handle('council:send-prompt', async (_event, prompt, files) => {
     if (!prompt || typeof prompt !== 'string') {
       return { success: false, reason: 'Invalid prompt' };
+    }
+    let filePaths;
+    try {
+      filePaths = resolveAttachments(files);
+    } catch (err) {
+      return { success: false, reason: err.message };
     }
     // Two routers would type into the same three tabs at once
     if (sessionRunning) {
@@ -86,7 +93,7 @@ function registerIpcHandlers(mainWindow, windowManager) {
     sessionRunning = true;
     try {
       const r = createRouter();
-      return await r.run(prompt.trim());
+      return await r.run(prompt.trim(), { files: filePaths });
     } finally {
       sessionRunning = false;
     }
@@ -218,6 +225,22 @@ function registerIpcHandlers(mainWindow, windowManager) {
 
   // Start login polling
   startLoginPolling(mainWindow, windowManager);
+}
+
+// Attachments arrive as { name, path } when the file came from disk, or
+// { name, dataUrl } when it has no path (e.g. pasted) — those are written to
+// a temp file, since the sites' upload inputs only take paths.
+function resolveAttachments(files) {
+  if (!Array.isArray(files)) return [];
+  return files.map((f) => {
+    if (f && typeof f.path === 'string' && f.path && fs.existsSync(f.path)) return f.path;
+    const m = f && typeof f.dataUrl === 'string' && f.dataUrl.match(/^data:[^,]*;base64,(.*)$/);
+    if (!m) throw new Error(`Attachment ${f && f.name} could not be read`);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'council-attach-'));
+    const file = path.join(dir, path.basename(f.name || 'attachment'));
+    fs.writeFileSync(file, Buffer.from(m[1], 'base64'));
+    return file;
+  });
 }
 
 function startLoginPolling(mainWindow, windowManager) {
