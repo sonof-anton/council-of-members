@@ -249,8 +249,15 @@ class Router extends EventEmitter {
 
   async captureResponseCounts() {
     const counts = {};
+    // Also snapshot each member's last response text BEFORE sending. The
+    // text-change fallback compares against it; captured later (once all
+    // sends finish), a fast member's new answer was already complete, became
+    // the baseline itself, and was never detected (Claude's virtualized
+    // transcript keeps the count flat, so only that fallback can catch it).
+    this.baselineTexts = {};
     for (const name of this.activeAIs) {
       counts[name] = await this.controllers[name].getResponseCount();
+      this.baselineTexts[name] = await this.controllers[name].getLastResponseText().catch(() => null);
       log('info', `${name}: Response count before send = ${counts[name]}`);
     }
     return counts;
@@ -285,7 +292,7 @@ class Router extends EventEmitter {
         });
 
         const rawText = await Promise.race([
-          monitor.waitForResponse(countBefore),
+          monitor.waitForResponse(countBefore, this.baselineTexts && this.baselineTexts[name]),
           skipPromise,
           this.abortPromise
         ]);

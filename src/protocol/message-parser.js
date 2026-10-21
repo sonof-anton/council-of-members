@@ -52,11 +52,26 @@ function extractSections(text) {
   const sections = {};
   const sectionNames = ['ANSWER', 'RESULT', 'FEEDBACK', 'REVIEW', 'PROPOSED', 'QUESTION', 'REASONING'];
 
+  // A header is the name at the start of a line (optionally bold/heading
+  // marked) followed by a colon or a line break. Content may start on the
+  // same line — Gemini writes "ANSWER:To replicate..." — which the old
+  // newline-required pattern missed, so the whole raw response (FEEDBACK,
+  // AGREE and all) became the "answer".
+  const names = sectionNames.join('|');
+  const header = (n) => `(?:^|\\n)[ \\t*#]*(?:${n})[ \\t*]*(?::|(?=\\n))[ \\t*]*`;
+  const end = `(?=${header(names)}|\\n[ \\t*]*(?:VOTE|AGREE)\\s*[:\\-]|\\*\\*END\\*\\*|$)`;
+
   for (const name of sectionNames) {
-    const pattern = new RegExp(`${name}[:\\s]*\\n([\\s\\S]*?)(?=\\n(?:${sectionNames.join('|')}|VOTE:|AGREE:|\\*\\*END\\*\\*)|$)`, 'i');
-    const match = text.match(pattern);
-    if (match) {
-      sections[name] = match[1].trim();
+    const pattern = new RegExp(`${header(name)}([\\s\\S]*?)${end}`, 'gi');
+    // Take the longest match: Claude's DOM often repeats the header
+    // ("ANSWER:\n\nANSWER:\n\n..."), leaving an empty first match.
+    let best = '';
+    for (const match of text.matchAll(pattern)) {
+      const content = match[1].trim();
+      if (content.length > best.length) best = content;
+    }
+    if (best) {
+      sections[name] = best;
     }
   }
 

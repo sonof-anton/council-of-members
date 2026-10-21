@@ -32,43 +32,43 @@ function registerIpcHandlers(mainWindow, windowManager) {
     router = new Router(controllers);
 
     router.on('phase-change', (data) => {
-      mainWindow.webContents.send('council:phase-change', data);
+      windowManager.uiView.webContents.send('council:phase-change', data);
     });
 
     router.on('ai-status', (data) => {
-      mainWindow.webContents.send('council:ai-status', data);
+      windowManager.uiView.webContents.send('council:ai-status', data);
     });
 
     router.on('round-update', (data) => {
-      mainWindow.webContents.send('council:round-update', data);
+      windowManager.uiView.webContents.send('council:round-update', data);
     });
 
     router.on('consensus', (data) => {
-      mainWindow.webContents.send('council:consensus', data);
+      windowManager.uiView.webContents.send('council:consensus', data);
     });
 
     router.on('individual-consensus', (data) => {
-      mainWindow.webContents.send('council:individual-consensus', data);
+      windowManager.uiView.webContents.send('council:individual-consensus', data);
     });
 
     router.on('log-message', (data) => {
-      mainWindow.webContents.send('council:log-message', data);
+      windowManager.uiView.webContents.send('council:log-message', data);
     });
 
     router.on('error', (data) => {
-      mainWindow.webContents.send('council:error', data);
+      windowManager.uiView.webContents.send('council:error', data);
     });
 
     router.on('timeout-tick', (data) => {
-      mainWindow.webContents.send('council:timeout-tick', data);
+      windowManager.uiView.webContents.send('council:timeout-tick', data);
     });
 
     router.on('ai-thought', (data) => {
-      mainWindow.webContents.send('council:ai-thought', data);
+      windowManager.uiView.webContents.send('council:ai-thought', data);
     });
 
     router.on('perf-update', (data) => {
-      mainWindow.webContents.send('council:perf-update', data);
+      windowManager.uiView.webContents.send('council:perf-update', data);
     });
 
     return router;
@@ -256,7 +256,7 @@ function startLoginPolling(mainWindow, windowManager) {
       }
     }
 
-    mainWindow.webContents.send('council:login-status', status);
+    windowManager.uiView.webContents.send('council:login-status', status);
   }, 5000);
 }
 

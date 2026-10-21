@@ -19,6 +19,14 @@ class GeminiAdapter extends BrowserController {
     const count = await super.getResponseCount();
     if (count > 0) return count;
 
+    // No user turn yet means no responses — the broad fallback selectors
+    // below ([class*="response"] etc.) match page chrome on an empty chat,
+    // which set the "before" baseline to 1 and hid the first real response.
+    const hasUserTurn = await this.webContents.executeJavaScript(
+      `document.querySelectorAll('user-query').length > 0`
+    ).catch(() => true);
+    if (!hasUserTurn) return 0;
+
     // Fallback: scan top-level and iframes for response elements
     return this.webContents.executeJavaScript(
       `(function() {` +
@@ -64,7 +72,7 @@ class GeminiAdapter extends BrowserController {
 
   async getLastResponseText() {
     // Try configured selectors first
-    const text = await super.getLastResponseText();
+    const text = await this._primaryResponseText();
 
     // Gemini's DOM sometimes matches `.model-response-text` (or similar) on
     // an accessibility node — e.g. a visually-hidden "Gemini said" label —
@@ -78,6 +86,31 @@ class GeminiAdapter extends BrowserController {
     const deep = await this._deepScanResponseText();
     if (deep && (!text || deep.length > text.length)) return deep;
     return text;
+  }
+
+  // Like the base implementation, but strips inline source chips: Gemini
+  // renders citations as <sources-carousel-inline>/<source-inline-chip>
+  // buttons inside the answer, whose labels ("SSD Nodes", "GitHub", "+ 1")
+  // otherwise land mid-sentence in the captured text.
+  async _primaryResponseText() {
+    const selector = await this.findSelector(this.config.responseSelectors);
+    if (!selector) return null;
+    return this.webContents.executeJavaScript(
+      `(function() {` +
+      `  var els = document.querySelectorAll(${this._safeStringify(selector)});` +
+      `  if (els.length === 0) return null;` +
+      `  var clone = els[els.length - 1].cloneNode(true);` +
+      `  var chips = clone.querySelectorAll('sources-carousel-inline, source-inline-chip, [class*="source-inline-chip"]');` +
+      `  for (var i = 0; i < chips.length; i++) chips[i].remove();` +
+      // innerText needs layout; a detached clone falls back to textContent
+      // semantics, so attach it off-screen while reading.
+      `  clone.style.position = 'fixed'; clone.style.left = '-99999px';` +
+      `  document.body.appendChild(clone);` +
+      `  var t = clone.innerText;` +
+      `  clone.remove();` +
+      `  return t;` +
+      `})()`
+    ).catch(() => null);
   }
 
   // Shadow DOM / iframe scan for the response text — separated out so
@@ -257,9 +290,26 @@ class GeminiAdapter extends BrowserController {
   // outside the visible viewport. Confirm a real turn actually started
   // (a user-query element appears) rather than trusting the click alone.
   async verifySubmitted() {
+    // A new user-query (vs. the count before this send) or a Stop button
+    // means the turn started. Checking for "any user-query" passed instantly
+    // from round 2 on, since round 1's query is still on the page.
+    const before = this._userQueriesBefore || 0;
     return this.webContents.executeJavaScript(
-      `document.querySelectorAll('user-query').length > 0`
+      `(document.querySelectorAll('user-query').length > ${before}) || ` +
+      `!!document.querySelector('button[aria-label*="Stop" i]')`
     ).catch(() => false);
+  }
+
+  // Gemini can take well over 800ms to render the new user-query. Clicking
+  // again too early lands on the Stop button that replaced Send in the same
+  // spot and cancels the response that had in fact started.
+  async waitForSubmitted(timeoutMs = 3000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (await this.verifySubmitted()) return true;
+      await this._wait(250);
+    }
+    return false;
   }
 
   // Fallback for when the button exists and isn't disabled but a plain
@@ -271,6 +321,7 @@ class GeminiAdapter extends BrowserController {
   async realClickSubmit(btnSelector) {
     const rect = await this.webContents.executeJavaScript(
       `(function() {` +
+      `  if (document.querySelector('button[aria-label*="Stop" i]')) return {generating: true};` +
       `  var btn = document.querySelector(${this._safeStringify(btnSelector)});` +
       `  if (!btn) return null;` +
       `  btn.scrollIntoView({block: 'center'});` +
@@ -278,6 +329,11 @@ class GeminiAdapter extends BrowserController {
       `  return {x: r.left + r.width / 2, y: r.top + r.height / 2, vh: window.innerHeight};` +
       `})()`
     ).catch(() => null);
+    if (rect && rect.generating) {
+      // Send already went through — a click here would hit Stop
+      log('info', 'gemini: response already generating, skipping real mouse click');
+      return true;
+    }
     if (!rect || rect.y < 0 || rect.y > rect.vh) {
       log('warn', `gemini: send button off-screen even after scrollIntoView (y=${rect && rect.y}, viewport=${rect && rect.vh})`);
       return false;
@@ -292,6 +348,9 @@ class GeminiAdapter extends BrowserController {
   async geminiSubmit() {
     // Try up to 4 times with increasing waits for the send button to appear
     const waits = [500, 1000, 1500, 2000];
+    this._userQueriesBefore = await this.webContents.executeJavaScript(
+      `document.querySelectorAll('user-query').length`
+    ).catch(() => 0);
 
     for (let attempt = 0; attempt < waits.length; attempt++) {
       await this._wait(waits[attempt]);
@@ -307,15 +366,13 @@ class GeminiAdapter extends BrowserController {
         ).catch(() => false);
 
         if (clicked) {
-          await this._wait(800);
-          if (await this.verifySubmitted()) {
+          if (await this.waitForSubmitted()) {
             log('info', `gemini: Clicked send button (attempt ${attempt + 1})`);
             return;
           }
           log('warn', `gemini: .click() fired but no user-query appeared — trying a real mouse click`);
           if (await this.realClickSubmit(btnSelector)) {
-            await this._wait(800);
-            if (await this.verifySubmitted()) {
+            if (await this.waitForSubmitted()) {
               log('info', `gemini: Real mouse click confirmed submission (attempt ${attempt + 1})`);
               return;
             }
@@ -339,8 +396,11 @@ class GeminiAdapter extends BrowserController {
       ).catch(() => false);
 
       if (scanned) {
-        log('info', `gemini: Clicked send via scan (attempt ${attempt + 1}): ${scanned}`);
-        return;
+        if (await this.waitForSubmitted()) {
+          log('info', `gemini: Clicked send via scan (attempt ${attempt + 1}): ${scanned}`);
+          return;
+        }
+        log('warn', `gemini: scan-click (${scanned}) fired but no user-query appeared (attempt ${attempt + 1})`);
       }
 
       log('warn', `gemini: Send button not found (attempt ${attempt + 1}/${waits.length})`);

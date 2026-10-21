@@ -50,6 +50,31 @@ VOTE: YES
   });
 });
 
+describe('extractSections', () => {
+  it('should read ANSWER content that starts on the header line', () => {
+    const s = extractSections('ANSWER:Use Ollama.\nMore detail.\n\nFEEDBACK:\nGood points.\n\nAGREE: YES');
+    assert.equal(s.ANSWER, 'Use Ollama.\nMore detail.');
+    assert.equal(s.FEEDBACK, 'Good points.');
+    assert.equal(s.RESULT, s.ANSWER);
+  });
+
+  it('should skip a repeated empty header', () => {
+    const s = extractSections('ANSWER:\n\nANSWER:\n\nThe real answer.\n\nFEEDBACK:\nNone.\n\nAGREE: NO');
+    assert.equal(s.ANSWER, 'The real answer.');
+  });
+
+  it('should not treat the word inside a sentence as a header', () => {
+    const s = extractSections('ANSWER:\nYour ANSWER: must be complete, the guide says.\nSecond line.\n\nAGREE: YES');
+    assert.equal(s.ANSWER, 'Your ANSWER: must be complete, the guide says.\nSecond line.');
+  });
+
+  it('should handle bold markdown headers', () => {
+    const s = extractSections('**ANSWER:**\nBold answer.\n\n**FEEDBACK:**\nBold feedback.\n\n**AGREE: YES**');
+    assert.equal(s.ANSWER, 'Bold answer.');
+    assert.equal(s.FEEDBACK, 'Bold feedback.');
+  });
+});
+
 describe('extractConsensusAnswer', () => {
   it('should prefer RESULT section', () => {
     const responses = {

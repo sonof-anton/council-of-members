@@ -1,7 +1,6 @@
 'use strict';
 
 const { app, BrowserWindow } = require('electron');
-const path = require('path');
 const WindowManager = require('./window-manager.js');
 const { registerIpcHandlers } = require('./ipc-handlers.js');
 
@@ -13,19 +12,13 @@ function createWindow() {
     width: 1400,
     height: 900,
     backgroundColor: '#000000',
-    title: 'COUNCIL OF MEMBERS',
-    webPreferences: {
-      preload: path.join(__dirname, '..', 'renderer', 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false
-    }
+    title: 'COUNCIL OF MEMBERS'
   });
-
-  mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 
   windowManager = new WindowManager(mainWindow);
   windowManager.createViews();
+  windowManager.createUiView();
+  windowManager.layout();
 
   registerIpcHandlers(mainWindow, windowManager);
 

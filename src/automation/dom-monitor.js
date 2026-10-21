@@ -15,7 +15,9 @@ class DomMonitor {
     this.controller = controller;
   }
 
-  async waitForResponse(countBefore) {
+  // baselineBefore: last response text captured before the message was sent
+  // (preferred); when omitted it is read now, which can be too late.
+  async waitForResponse(countBefore, baselineBefore) {
     const startTime = Date.now();
     const aiName = this.controller.aiName;
     const timeoutMs = (RESPONSE_TIMEOUT_PER_MEMBER && RESPONSE_TIMEOUT_PER_MEMBER[aiName]) || RESPONSE_TIMEOUT_MS;
@@ -31,7 +33,9 @@ class DomMonitor {
     // Capture the initial text of the last response before polling starts.
     // This is the previous round's response — when text changes from this,
     // we know a new response has arrived even if the count is stuck.
-    let baselineText = await this.controller.getLastResponseText().catch(() => null);
+    let baselineText = baselineBefore !== undefined
+      ? baselineBefore
+      : await this.controller.getLastResponseText().catch(() => null);
     let textFallbackActive = false;
     let textStableCount = 0;
 

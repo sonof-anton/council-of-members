@@ -18,7 +18,8 @@ function fakeController(name) {
     aiName: name,
     sent: [],
     async sendMessage(text) { this.sent.push(text); },
-    async getResponseCount() { return 0; }
+    async getResponseCount() { return 0; },
+    async getLastResponseText() { return null; }
   };
 }
 
