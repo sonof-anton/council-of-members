@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; font-src 'self'; style-src 'self' 'unsafe-inline';">
+  <title>COUNCIL OF MEMBERS</title>
+  <link rel="stylesheet" href="styles/hud.css">
+</head>
+<body>
+  <div id="app">
+    <!-- View Switcher -->
+    <div id="view-switcher">
+      <button data-level="0">LVL 0 // LOGIN</button>
+      <button class="active" data-level="1">LVL 1 // CHANCELLOR</button>
+      <button data-level="2">LVL 2 // STATUS</button>
+      <button data-level="3">LVL 3 // FULL</button>
+    </div>
+
+    <!-- Constitution (below tabs, toggleable) -->
+    <div id="constitution-display">
+      <div class="constitution-header">CONSTITUTION [+]</div>
+      <pre class="constitution-body" style="display:none;">1. This process follows the scientific method: propose, review, critique, refine.
+2. All three participants have equal standing. The human user asked the question.
+3. Follow the structured format exactly.
+4. Productive disagreement is expected and valuable.</pre>
+    </div>
+
+    <!-- Level 0: Login -->
+    <div id="level-0">
+      <div id="login-header">
+        <span class="status-info">LOG INTO EACH SERVICE BELOW. SESSIONS PERSIST ON RESTART.</span>
+      </div>
+      <div id="login-nav">
+        <div class="login-nav-group" data-ai="claude">
+          <button class="btn-nav-back" data-ai="claude">&lt; BACK</button>
+          <button class="btn-nav-fwd" data-ai="claude">FWD &gt;</button>
+        </div>
+        <div class="login-nav-group" data-ai="grok">
+          <button class="btn-nav-back" data-ai="grok">&lt; BACK</button>
+          <button class="btn-nav-fwd" data-ai="grok">FWD &gt;</button>
+        </div>
+        <div class="login-nav-group" data-ai="gemini">
+          <button class="btn-nav-back" data-ai="gemini">&lt; BACK</button>
+          <button class="btn-nav-fwd" data-ai="gemini">FWD &gt;</button>
+        </div>
+      </div>
+      <div id="login-labels">
+        <div class="browser-label">CLAUDE</div>
+        <div class="browser-label">GROK</div>
+        <div class="browser-label">GEMINI</div>
+      </div>
+      <!-- WebContentsViews fill the rest in login mode -->
+    </div>
+
+    <!-- Level 1: Chancellor Interface -->
+    <div id="level-1" class="level-active">
+      <div id="prompt-area">
+        <div id="login-warning" class="status-error" style="display:none;">NOT ALL MEMBERS LOGGED IN</div>
+        <textarea id="prompt-input" placeholder=".TX QUERY TO MEMBERS ..."></textarea>
+        <div id="file-drop-zone" class="file-drop-zone">
+          DROP FILES HERE OR CLICK TO ATTACH
+          <input type="file" id="file-input" multiple style="display:none;">
+        </div>
+        <div id="file-list"></div>
+        <div id="prompt-controls">
+          <button id="btn-abort" style="display:none;">.ABORT</button>
+          <button id="btn-send">.TX</button>
+        </div>
+        <div id="chancellor-status"></div>
+      </div>
+      <div id="consensus-area">
+        <div id="consensus-header">.RX CONSENSUS</div>
+        <div id="consensus-body"></div>
+        <div id="consensus-meta"></div>
+      </div>
+    </div>
+
+    <!-- Level 2: Status Readout -->
+    <div id="level-2">
+      <div id="status-bar">
+        <span id="status-round">ROUND --</span>
+        <span id="status-phase">IDLE</span>
+        <button id="btn-diag" style="padding:2px 8px;font-size:10px;">.DIAG</button>
+      </div>
+      <div id="ai-columns">
+        <div class="ai-column" data-ai="claude">
+          <div class="ai-column-header">
+            <span>MEMBER 1</span>
+            <span class="ai-timer" data-ai="claude"></span>
+            <button class="btn-wait" data-ai="claude" style="display:none;">.WAIT</button>
+            <button class="btn-skip" data-ai="claude" style="display:none;">.SKIP</button>
+          </div>
+          <div class="ai-column-body">
+            <div class="ai-field ai-login-field">
+              <div class="ai-field-label">LOGIN</div>
+              <div class="ai-login-status status-error">LOGGED OUT</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">STATUS</div>
+              <div class="ai-status status-info">STANDBY</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">THOUGHTS</div>
+              <div class="ai-thought status-waiting">--</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">SPEED</div>
+              <div class="ai-speed status-info">--</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">VOTE</div>
+              <div class="ai-vote vote-pending">--</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">RESPONSE</div>
+              <div class="ai-response-history"></div>
+            </div>
+          </div>
+        </div>
+        <div class="ai-column-resize" data-left="claude" data-right="grok"></div>
+        <div class="ai-column" data-ai="grok">
+          <div class="ai-column-header">
+            <span>MEMBER 2</span>
+            <span class="ai-timer" data-ai="grok"></span>
+            <button class="btn-wait" data-ai="grok" style="display:none;">.WAIT</button>
+            <button class="btn-skip" data-ai="grok" style="display:none;">.SKIP</button>
+          </div>
+          <div class="ai-column-body">
+            <div class="ai-field ai-login-field">
+              <div class="ai-field-label">LOGIN</div>
+              <div class="ai-login-status status-error">LOGGED OUT</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">STATUS</div>
+              <div class="ai-status status-info">STANDBY</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">THOUGHTS</div>
+              <div class="ai-thought status-waiting">--</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">SPEED</div>
+              <div class="ai-speed status-info">--</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">VOTE</div>
+              <div class="ai-vote vote-pending">--</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">RESPONSE</div>
+              <div class="ai-response-history"></div>
+            </div>
+          </div>
+        </div>
+        <div class="ai-column-resize" data-left="grok" data-right="gemini"></div>
+        <div class="ai-column" data-ai="gemini">
+          <div class="ai-column-header">
+            <span>MEMBER 3</span>
+            <span class="ai-timer" data-ai="gemini"></span>
+            <button class="btn-wait" data-ai="gemini" style="display:none;">.WAIT</button>
+            <button class="btn-skip" data-ai="gemini" style="display:none;">.SKIP</button>
+          </div>
+          <div class="ai-column-body">
+            <div class="ai-field ai-login-field">
+              <div class="ai-field-label">LOGIN</div>
+              <div class="ai-login-status status-error">LOGGED OUT</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">STATUS</div>
+              <div class="ai-status status-info">STANDBY</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">THOUGHTS</div>
+              <div class="ai-thought status-waiting">--</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">SPEED</div>
+              <div class="ai-speed status-info">--</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">VOTE</div>
+              <div class="ai-vote vote-pending">--</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">RESPONSE</div>
+              <div class="ai-response-history"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Level 3: Full View -->
+    <div id="level-3">
+      <div id="l3-status-bar">
+        <span id="l3-round" class="round-display">ROUND --</span>
+        <span id="l3-phase">IDLE</span>
+      </div>
+      <div id="l3-ai-status">
+        <div class="l3-ai-col" data-ai="claude">
+          <span class="l3-ai-name">MEMBER 1</span>
+          <span class="l3-ai-state status-info">STANDBY</span>
+          <span class="l3-ai-vote vote-pending">--</span>
+        </div>
+        <div class="l3-ai-col" data-ai="grok">
+          <span class="l3-ai-name">MEMBER 2</span>
+          <span class="l3-ai-state status-info">STANDBY</span>
+          <span class="l3-ai-vote vote-pending">--</span>
+        </div>
+        <div class="l3-ai-col" data-ai="gemini">
+          <span class="l3-ai-name">MEMBER 3</span>
+          <span class="l3-ai-state status-info">STANDBY</span>
+          <span class="l3-ai-vote vote-pending">--</span>
+        </div>
+      </div>
+      <div id="message-log"></div>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

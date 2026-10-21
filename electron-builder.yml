@@ -1,0 +1,17 @@
+appId: com.counciloais.app
+productName: CouncilOfAIs
+directories:
+  output: dist
+files:
+  - src/**/*
+  - assets/**/*
+  - package.json
+extraResources:
+  - from: assets/fonts/
+    to: fonts/
+win:
+  target: nsis
+  icon: assets/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

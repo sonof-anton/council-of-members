@@ -1,0 +1,15 @@
+{
+  "name": "council-of-members",
+  "version": "1.0.0",
+  "description": "Council of Members - Automated consensus engine",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "test": "node --test test/protocol/*.test.js"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}
