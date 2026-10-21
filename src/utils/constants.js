@@ -23,6 +23,8 @@ const AI_MEMBER_LABELS = {
 
 const PROTOCOL_VERSION = 'v1.3';
 const MAX_ROUNDS = 10;
+// A lone member agreeing with itself is not a council consensus
+const MIN_CONSENSUS_MEMBERS = 2;
 const POLL_INTERVAL_MS = 500;
 const RESPONSE_TIMEOUT_MS = 180000;
 
@@ -64,6 +66,7 @@ module.exports = {
   AI_MEMBER_LABELS,
   PROTOCOL_VERSION,
   MAX_ROUNDS,
+  MIN_CONSENSUS_MEMBERS,
   POLL_INTERVAL_MS,
   RESPONSE_TIMEOUT_MS,
   RESPONSE_TIMEOUT_PER_MEMBER,

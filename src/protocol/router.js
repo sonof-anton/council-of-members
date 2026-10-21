@@ -3,7 +3,7 @@
 const { EventEmitter } = require('events');
 const fs = require('fs');
 const path = require('path');
-const { AI_NAMES, MAX_ROUNDS, PHASES, RESPONSE_TIMEOUT_MS, RESPONSE_TIMEOUT_PER_MEMBER } = require('../utils/constants.js');
+const { AI_NAMES, MAX_ROUNDS, MIN_CONSENSUS_MEMBERS, PHASES, RESPONSE_TIMEOUT_MS, RESPONSE_TIMEOUT_PER_MEMBER } = require('../utils/constants.js');
 const { formatInitialMessage, formatRelayMessage, formatUnificationMessage } = require('./message-formatter.js');
 const { parseResponse } = require('./message-parser.js');
 const { checkConsensus } = require('./consensus-detector.js');
@@ -96,7 +96,7 @@ class Router extends EventEmitter {
       this.emitLog('CouncilOfMembers', 'Round 1 complete — relaying responses so all members can review each other');
 
       // Subsequent rounds
-      while (this.state.round < MAX_ROUNDS && !this.state.aborted) {
+      while (this.state.round < MAX_ROUNDS && !this.state.aborted && this.activeAIs.length >= MIN_CONSENSUS_MEMBERS) {
         this.state.startRound();
 
         let message;
@@ -165,11 +165,19 @@ class Router extends EventEmitter {
       this.state.phase = PHASES.TIMEOUT;
       this.emitPhase();
 
+      // Either rounds ran out, or too few members are left to deliberate
+      // (continuing alone would just burn the remaining rounds).
+      const reason = this.activeAIs.length < MIN_CONSENSUS_MEMBERS
+        ? `ONLY ${this.activeAIs.length} MEMBER(S) STILL ACTIVE AFTER ROUND ${this.state.round}`
+        : `NO CONSENSUS AFTER ${MAX_ROUNDS} ROUNDS`;
+      this.emitLog('CouncilOfMembers', reason);
+
       const individualAnswers = this.buildIndividualAnswers();
-      this.writeTranscript(`\n${'='.repeat(60)}\n=== NO CONSENSUS AFTER ${MAX_ROUNDS} ROUNDS ===\n${individualAnswers}\n${'='.repeat(60)}\n`);
+      this.writeTranscript(`\n${'='.repeat(60)}\n=== ${reason} ===\n${individualAnswers}\n${'='.repeat(60)}\n`);
 
       this.emit('consensus', {
         answer: individualAnswers,
+        answers: this.buildIndividualAnswersMap(),
         rounds: this.state.round,
         votes: this.state.getVotes(),
         noConsensus: true

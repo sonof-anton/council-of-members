@@ -49,6 +49,17 @@ describe('checkConsensus', () => {
     assert.equal(result.votes.grok, 'MISSING');
   });
 
+  it('should not let a lone remaining member reach consensus', () => {
+    const parsed = { claude: { vote: 'YES' }, grok: null, gemini: null };
+    const result = checkConsensus(parsed, ['claude']);
+    assert.equal(result.reached, false);
+  });
+
+  it('should allow consensus between two remaining members', () => {
+    const parsed = { claude: { vote: 'YES' }, grok: null, gemini: { vote: 'YES' } };
+    assert.equal(checkConsensus(parsed, ['claude', 'gemini']).reached, true);
+  });
+
   it('should return reached=false when all vote NO', () => {
     const parsed = {
       claude: { vote: 'NO' },

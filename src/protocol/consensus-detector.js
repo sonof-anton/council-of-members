@@ -1,6 +1,6 @@
 'use strict';
 
-const { AI_NAMES } = require('../utils/constants.js');
+const { AI_NAMES, MIN_CONSENSUS_MEMBERS } = require('../utils/constants.js');
 
 function checkConsensus(parsedResponses, activeAIs) {
   const names = activeAIs || AI_NAMES;
@@ -17,8 +17,7 @@ function checkConsensus(parsedResponses, activeAIs) {
     }
   }
 
-  // Need at least 1 active member who responded
-  if (names.length < 1) {
+  if (names.length < MIN_CONSENSUS_MEMBERS) {
     allVotedYes = false;
   }
 

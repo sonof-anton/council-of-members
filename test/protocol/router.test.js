@@ -81,6 +81,21 @@ describe('Router', () => {
     assert.ok(!round3.includes('[ERROR'));
   });
 
+  it('ends with individual answers once fewer than two members remain', async () => {
+    const timeout = new Error('Response timeout');
+    const { router, controllers } = makeRouter({
+      claude: [GOOD('NO'), GOOD('YES'), GOOD('YES'), GOOD('YES')],
+      grok: [GOOD('NO'), timeout],
+      gemini: [GOOD('NO'), timeout]
+    });
+    const result = await router.run('test question');
+
+    assert.equal(result.noConsensus, true);
+    assert.equal(result.rounds, 2); // stopped, instead of claude agreeing with itself for 8 more rounds
+    assert.equal(controllers.claude.sent.length, 2);
+    assert.ok(result.answer.includes('A complete answer.'));
+  });
+
   it('abort ends a round that is still waiting on members', async () => {
     const { router } = makeRouter({
       claude: ['hang'],
