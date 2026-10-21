@@ -32,7 +32,18 @@ function createWindow() {
   mainWindow.on('resize', () => windowManager.layout());
 }
 
-app.whenReady().then(createWindow);
+// A second copy would share the persist:* login partitions with the first
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+  app.whenReady().then(createWindow);
+}
 
 app.on('window-all-closed', () => {
   app.quit();

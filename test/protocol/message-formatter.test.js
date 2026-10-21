@@ -17,12 +17,11 @@ describe('formatInitialMessage', () => {
 
   it('should include format rules and principles', () => {
     const msg = formatInitialMessage('test', 1);
-    assert.ok(msg.includes('**END**'));
-    assert.ok(msg.includes('VOTE: YES'));
-    assert.ok(msg.includes('VOTE: NO'));
-    assert.ok(msg.includes('RESULT'));
-    assert.ok(msg.includes('REVIEW'));
-    assert.ok(msg.includes('CONSTITUTION'));
+    assert.ok(msg.includes('ANSWER:'));
+    assert.ok(msg.includes('FEEDBACK:'));
+    assert.ok(msg.includes('AGREE: YES'));
+    assert.ok(msg.includes('AGREE: NO'));
+    assert.ok(msg.includes('GUIDELINES'));
     assert.ok(msg.includes('scientific method'));
   });
 
@@ -64,7 +63,20 @@ describe('formatRelayMessage', () => {
 
   it('should include peer review instructions', () => {
     const msg = formatRelayMessage({ claude: 'a', grok: 'b', gemini: 'c' }, 2);
-    assert.ok(msg.includes('REVIEW'));
+    assert.ok(msg.includes('FEEDBACK'));
     assert.ok(msg.includes('critique'));
+  });
+
+  it('should leave out members with no usable answer', () => {
+    const msg = formatRelayMessage({
+      claude: 'First AI says hello',
+      grok: null,
+      gemini: '[ERROR: gemini: Response timeout after 900000ms]'
+    }, 3);
+    assert.ok(msg.includes('First AI says hello'));
+    assert.ok(!msg.includes("Member 2's Answer"));
+    assert.ok(!msg.includes("Member 3's Answer"));
+    assert.ok(!msg.includes('null'));
+    assert.ok(!msg.includes('[ERROR'));
   });
 });

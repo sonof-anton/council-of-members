@@ -29,6 +29,7 @@ class Router extends EventEmitter {
 
     for (const name of AI_NAMES) {
       this.extractors[name] = new ResponseExtractor(controllers[name]);
+      controllers[name].isAborted = () => this.state.aborted;
       // Wire up thought callback for sub-status display
       controllers[name].onThought = (thought) => {
         this.emit('ai-thought', { name, thought });
@@ -72,6 +73,7 @@ class Router extends EventEmitter {
     this.disabledAIs.clear();
     this.waitingMembers.clear();
     this.unifying = false;
+    this.abortPromise = new Promise((resolve) => { this.resolveAbort = resolve; });
     this.initTranscript(prompt);
     this.state.prompt = prompt;
     this.state.phase = PHASES.TRANSMITTING;
@@ -115,6 +117,7 @@ class Router extends EventEmitter {
         const countsBefore2 = await this.captureResponseCounts();
         const sent2 = await this.sendToAll(message);
         await this.collectAll(countsBefore2, sent2);
+        if (this.state.aborted) break;
 
         const consensus = checkConsensus(this.state.currentParsed, this.activeAIs);
         this.state.saveRound();
@@ -176,6 +179,27 @@ class Router extends EventEmitter {
 
     } catch (err) {
       log('error', `Router error: ${err.message}`);
+      this.stopTickTimer();
+
+      // Earlier rounds may still hold good answers — deliver those instead of
+      // throwing away the whole session because the latest round failed.
+      if (Object.keys(this.buildIndividualAnswersMap()).length > 0) {
+        this.state.phase = PHASES.TIMEOUT;
+        this.emitPhase();
+        const answer = `SESSION ENDED EARLY (${err.message}) — LAST ANSWER FROM EACH MEMBER:\n\n` +
+          this.buildIndividualAnswers().replace(/^NO CONSENSUS REACHED — INDIVIDUAL MEMBER ANSWERS:\n\n?/, '');
+        this.writeTranscript(`\n${'='.repeat(60)}\n${answer}\n${'='.repeat(60)}\n`);
+        this.emit('error', err.message);
+        this.emit('consensus', {
+          answer,
+          answers: this.buildIndividualAnswersMap(),
+          rounds: this.state.round,
+          votes: this.state.getVotes(),
+          noConsensus: true
+        });
+        return { success: true, answer, rounds: this.state.round, noConsensus: true, reason: err.message };
+      }
+
       this.state.phase = PHASES.IDLE;
       this.emitPhase();
       this.emit('error', err.message);
@@ -193,6 +217,7 @@ class Router extends EventEmitter {
 
     // Sequential: focus tab, type message, hit send, move to next
     for (const name of active) {
+      if (this.state.aborted) return sent;
       this.emitAiStatus(name, 'TRANSMITTING', null);
       this.emitLog(name, '.TX typing...');
       try {
@@ -261,8 +286,10 @@ class Router extends EventEmitter {
 
         const rawText = await Promise.race([
           monitor.waitForResponse(countBefore),
-          skipPromise
+          skipPromise,
+          this.abortPromise
         ]);
+        if (this.state.aborted) return;
 
         // Clean up skip resolver
         this.skipResolvers.delete(name);
@@ -292,6 +319,7 @@ class Router extends EventEmitter {
       } catch (err) {
         // Clean up skip resolver
         this.skipResolvers.delete(name);
+        if (this.state.aborted) return;
         // Disable this AI for future rounds — don't waste time on it
         this.disabledAIs.add(name);
         this.emitAiStatus(name, 'ERROR', null);
@@ -302,6 +330,8 @@ class Router extends EventEmitter {
 
     // Stop timeout tick timer
     this.stopTickTimer();
+    this.skipResolvers.clear();
+    if (this.state.aborted) return;
 
     const responded = active.filter(name => {
       const r = this.state.currentResponses[name];
@@ -375,23 +405,23 @@ class Router extends EventEmitter {
     return false;
   }
 
+  // Current round first, then the last valid answer from previous rounds
+  // (for members that were disabled, skipped, or failed this round).
+  lastValidParsed(name) {
+    const isValid = (p) => p && p.raw && !p.raw.startsWith('[ERROR:') && !p.raw.startsWith('[SKIPPED');
+    if (isValid(this.state.currentParsed[name])) return this.state.currentParsed[name];
+    for (let i = this.state.rounds.length - 1; i >= 0; i--) {
+      const prev = this.state.rounds[i].parsed[name];
+      if (isValid(prev)) return prev;
+    }
+    return null;
+  }
+
   buildIndividualAnswersMap() {
     const answers = {};
     for (const name of AI_NAMES) {
-      // Try current round first
-      const parsed = this.state.currentParsed[name];
-      if (parsed && parsed.raw && !parsed.raw.startsWith('[ERROR:') && !parsed.raw.startsWith('[SKIPPED')) {
-        answers[name] = parsed.sections.RESULT || parsed.raw;
-        continue;
-      }
-      // Fall back to last valid answer from previous rounds (for disabled/skipped members)
-      for (let i = this.state.rounds.length - 1; i >= 0; i--) {
-        const prev = this.state.rounds[i].parsed[name];
-        if (prev && prev.raw && !prev.raw.startsWith('[ERROR:') && !prev.raw.startsWith('[SKIPPED')) {
-          answers[name] = prev.sections.RESULT || prev.raw;
-          break;
-        }
-      }
+      const parsed = this.lastValidParsed(name);
+      if (parsed) answers[name] = parsed.sections.RESULT || parsed.raw;
     }
     return answers;
   }
@@ -400,8 +430,8 @@ class Router extends EventEmitter {
     const parts = ['NO CONSENSUS REACHED — INDIVIDUAL MEMBER ANSWERS:\n'];
 
     for (const name of AI_NAMES) {
-      const parsed = this.state.currentParsed[name];
-      if (!parsed || !parsed.raw || parsed.raw.startsWith('[ERROR:')) continue;
+      const parsed = this.lastValidParsed(name);
+      if (!parsed) continue;
 
       const result = parsed.sections.RESULT || parsed.raw;
       const vote = parsed.vote || 'NONE';
@@ -475,6 +505,7 @@ class Router extends EventEmitter {
   abort() {
     this.state.aborted = true;
     this.stopTickTimer();
+    if (this.resolveAbort) this.resolveAbort('[ABORTED]');
   }
 
   emitPhase() {

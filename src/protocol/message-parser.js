@@ -24,10 +24,10 @@ function extractVote(text) {
 
   // Explicit AGREE/VOTE markers — flexible spacing and punctuation
   // Separator is optional: handles "AGREE: YES", "AGREE YES", "AGREE:YES", "AGREE - YES", etc.
-  if (/\bAGREE\s*[:\s=\-–—]*\s*YES\b/i.test(normalized)) return 'YES';
-  if (/\bAGREE\s*[:\s=\-–—]*\s*NO\b/i.test(normalized)) return 'NO';
-  if (/\bVOTE\s*[:\s=\-–—]*\s*YES\b/i.test(normalized)) return 'YES';
-  if (/\bVOTE\s*[:\s=\-–—]*\s*NO\b/i.test(normalized)) return 'NO';
+  // Use the LAST marker: the member's own vote closes the response, while
+  // earlier markers are usually quotes ("Member 2 said AGREE: YES, but...").
+  const markers = [...normalized.matchAll(/\b(?:AGREE|VOTE)\s*[:\s=\-–—]*\s*(YES|NO)\b/gi)];
+  if (markers.length > 0) return markers[markers.length - 1][1].toUpperCase();
 
   // "Agree" or "Agreed" followed by context clues
   if (/\bI\s+agree\b/i.test(normalized)) return 'YES';

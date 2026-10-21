@@ -10,6 +10,7 @@ const GeminiAdapter = require('../automation/adapters/gemini-adapter.js');
 const Router = require('../protocol/router.js');
 
 let router = null;
+let sessionRunning = false;
 let loginPollInterval = null;
 
 const adapterClasses = {
@@ -77,9 +78,18 @@ function registerIpcHandlers(mainWindow, windowManager) {
     if (!prompt || typeof prompt !== 'string') {
       return { success: false, reason: 'Invalid prompt' };
     }
+    // Two routers would type into the same three tabs at once
+    if (sessionRunning) {
+      return { success: false, reason: 'A session is already running' };
+    }
 
-    const r = createRouter();
-    return r.run(prompt.trim());
+    sessionRunning = true;
+    try {
+      const r = createRouter();
+      return await r.run(prompt.trim());
+    } finally {
+      sessionRunning = false;
+    }
   });
 
   ipcMain.handle('council:abort', async () => {

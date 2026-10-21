@@ -13,6 +13,11 @@ describe('extractVote', () => {
     assert.equal(extractVote('I disagree. VOTE: NO\nReason: ...\n**END**'), 'NO');
   });
 
+  it('should use the last marker when an earlier one is quoted', () => {
+    assert.equal(extractVote('FEEDBACK:\nMember 2 wrote AGREE: YES, but I see gaps.\n\nAGREE: NO\nNeeds work.'), 'NO');
+    assert.equal(extractVote('Last round I said AGREE: NO.\n\n**AGREE: YES**'), 'YES');
+  });
+
   it('should return null when no vote', () => {
     assert.equal(extractVote('Some text without a vote'), null);
   });

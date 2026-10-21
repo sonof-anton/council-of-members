@@ -40,6 +40,9 @@ class DomMonitor {
     let lastLoggedAt = startTime;
 
     while (Date.now() - startTime < timeoutMs || (this.controller.isWaiting && this.controller.isWaiting())) {
+      if (this.controller.isAborted && this.controller.isAborted()) {
+        throw new Error(`${aiName}: aborted`);
+      }
       const currentCount = await this.controller.getResponseCount();
       pollCount++;
 
@@ -104,7 +107,9 @@ class DomMonitor {
           // Safety check: if the text starts with our protocol header, we captured
           // our own sent message instead of the AI's response. Skip it.
           if (text.startsWith('[Round ')) {
-            // This is our TX, not the AI's RX — keep waiting
+            // This is our TX, not the AI's RX — keep waiting (still sleeping
+            // between polls, or this spins executeJavaScript in a hot loop)
+            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
             continue;
           }
 
@@ -186,8 +191,11 @@ class DomMonitor {
       await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
     }
 
-    // Timeout — return whatever we captured
-    if (lastText && lastText.length > 20) {
+    // Timeout — return what we captured only if it could be a real answer.
+    // Anything shorter is UI chrome ("+2 more", a bare "ANSWER:" heading,
+    // "Gemini said") that would otherwise be relayed to the other members
+    // as this member's answer.
+    if (lastText && lastText.length >= MIN_RESPONSE_LENGTH) {
       log('warn', `${aiName}: Timeout, returning partial (${lastText.length} chars)`);
       return lastText;
     }

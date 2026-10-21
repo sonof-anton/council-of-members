@@ -51,14 +51,23 @@ ${prompt}
 Please provide your ANSWER now. Write AGREE: NO on this first round since you haven't seen the other members' answers yet.`;
 }
 
+// Members that dropped out or were skipped have null / "[ERROR: ...]" /
+// "[SKIPPED ...]" placeholders — relaying those just shows the others
+// "null" or an internal error string as if it were an answer.
+function usableResponses(responses) {
+  return Object.entries(responses).filter(([, text]) =>
+    text && !text.startsWith('[ERROR:') && !text.startsWith('[SKIPPED')
+  );
+}
+
 function formatRelayMessage(responses, round) {
   const prevRound = round - 1;
   let body = `[Round ${round}] [${timestamp()}]
 
-Here are all three member responses from Round ${prevRound}:
+Here are the member responses from Round ${prevRound}:
 `;
 
-  for (const [aiName, responseText] of Object.entries(responses)) {
+  for (const [aiName, responseText] of usableResponses(responses)) {
     const label = AI_MEMBER_LABELS[aiName] || aiName;
     body += `
 === ${label}'s Answer ===
@@ -81,10 +90,10 @@ function formatUnificationMessage(responses, round) {
 
 All members agree on the substance. Now collaborate to produce one shared final answer.
 
-Here are all three member answers:
+Here are the member answers:
 `;
 
-  for (const [aiName, responseText] of Object.entries(responses)) {
+  for (const [aiName, responseText] of usableResponses(responses)) {
     const label = AI_MEMBER_LABELS[aiName] || aiName;
     body += `
 === ${label}'s Answer ===
@@ -93,7 +102,7 @@ ${responseText}
   }
 
   body += `
-Write a single ANSWER that combines the best elements from all three responses into one comprehensive, unified answer. This should be the best possible version incorporating all members' insights.
+Write a single ANSWER that combines the best elements from all the responses into one comprehensive, unified answer. This should be the best possible version incorporating all members' insights.
 
 AGREE: YES if you're satisfied with the unified version. AGREE: NO if you think it still needs work.`;
 
