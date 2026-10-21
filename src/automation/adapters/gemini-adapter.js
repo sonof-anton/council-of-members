@@ -73,7 +73,9 @@ class GeminiAdapter extends BrowserController {
   // Gemini's canned failure replies — returned in place of an answer when its
   // backend errors out. Returns the matched message, or null.
   detectSiteError(text) {
-    const m = (text || '').match(/I seem to be encountering an error[^\n]*|Something went wrong[^\n]*|I'm having a hard time fulfilling your request[^\n]*/i);
+    // Wording varies: "I seem to be encountering an error...",
+    // "I encountered an error doing what you asked. Could you try again?"
+    const m = (text || '').match(/I (?:seem to be )?encounter(?:ed|ing) an error[^\n]*|Something went wrong[^\n]*|I'm having a hard time fulfilling your request[^\n]*/i);
     return m ? m[0].trim() : null;
   }
 
