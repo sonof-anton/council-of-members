@@ -20,6 +20,6 @@ nsis:
 # bump "version" in package.json first or no device will see it as newer.
 publish:
   provider: github
-  owner: GITHUB_OWNER
+  owner: sonof-anton
   repo: council-of-members
   releaseType: release
