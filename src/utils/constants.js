@@ -2,6 +2,14 @@
 
 const AI_NAMES = ['claude', 'grok', 'gemini'];
 
+// Each member seat is a chat page on one domain of the domain library
+// (src/automation/domain-library.json), which holds that page's selectors.
+const MEMBER_DOMAINS = {
+  claude: 'claude.ai',
+  grok: 'grok.com',
+  gemini: 'gemini.google.com'
+};
+
 const AI_URLS = {
   claude: 'https://claude.ai/new',
   grok: 'https://grok.com/',
@@ -30,10 +38,24 @@ const POLL_INTERVAL_MS = 500;
 // executeJavaScript/insertText calls (seen on Gemini right after a 36 MB
 // upload), which would otherwise stall the whole session.
 const TX_TIMEOUT_MS = 120000;
+// Plus this much per 1,000 chars sent: Gemini's typing time grows with the
+// message (8.5k chars took 34s, 14k took 76s on 2026-11-10) and a flat 120s
+// dropped it mid-unification.
+const TX_TIMEOUT_PER_1K_MS = 10000;
+// A member replying with its site's own "try again" error is re-sent the
+// same message this many times before being dropped.
+const SITE_ERROR_RETRIES = 2;
 // Upload waits scale with file size up to 15 min (BrowserController)
 const ATTACH_TIMEOUT_MS = 16 * 60000;
 
 const RESPONSE_TIMEOUT_MS = 180000;
+
+// Outside consultations: a chat service on another site that a majority of
+// members ask the Chancellor to consult. Its replies are short, so the
+// member-sized minimum answer length doesn't apply.
+const CONSULT_TIMEOUT_MS = 180000;
+const CONSULT_MIN_REPLY_LENGTH = 20;
+const MAX_CONSULTS_PER_SESSION = 3;
 
 // Per-member timeouts — Gemini's deep-thinking mode regularly exceeds 180s
 const RESPONSE_TIMEOUT_PER_MEMBER = {
@@ -63,12 +85,14 @@ const PHASES = {
   CONSENSUS: 'CONSENSUS',
   UNIFYING: 'UNIFYING',
   TIMEOUT: 'TIMEOUT',
+  CONSULTING: 'CONSULTING',
   ABORTED: 'ABORTED'
 };
 
 module.exports = {
   AI_NAMES,
   AI_URLS,
+  MEMBER_DOMAINS,
   AI_LABELS,
   AI_MEMBER_LABELS,
   PROTOCOL_VERSION,
@@ -77,8 +101,13 @@ module.exports = {
   POLL_INTERVAL_MS,
   RESPONSE_TIMEOUT_MS,
   TX_TIMEOUT_MS,
+  TX_TIMEOUT_PER_1K_MS,
+  SITE_ERROR_RETRIES,
   ATTACH_TIMEOUT_MS,
   RESPONSE_TIMEOUT_PER_MEMBER,
+  CONSULT_TIMEOUT_MS,
+  CONSULT_MIN_REPLY_LENGTH,
+  MAX_CONSULTS_PER_SESSION,
   END_MARKER,
   VOTE_YES,
   VOTE_NO,

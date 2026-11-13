@@ -103,7 +103,7 @@ class GeminiAdapter extends BrowserController {
   // otherwise land mid-sentence in the captured text. Also drops KaTeX's
   // hidden MathML copy of each formula (see BrowserController).
   async _primaryResponseText() {
-    const selector = await this.findSelector(this.config.responseSelectors);
+    const selector = await this.findSelector(this.config.response);
     if (!selector) return null;
     return this.webContents.executeJavaScript(
       `(function() {` +
@@ -242,14 +242,18 @@ class GeminiAdapter extends BrowserController {
   }
 
   async sendMessage(text) {
+    // A hidden tab ignores the send click entirely
+    await this.ensurePageVisible();
+
     // 1. Focus
+    this.activity('Focusing chat tab', 'tx');
     this.webContents.focus();
     await this._wait(500);
 
     // 2. Find and prepare input — wait for it to be ready (Gemini can be slow between rounds)
     let selector = null;
     for (let retry = 0; retry < 3; retry++) {
-      selector = await this.findSelector(this.config.inputSelectors);
+      selector = await this.findSelector(this.config.promptEntry.selectors);
       if (selector) break;
       log('warn', `gemini: Input not found, retrying (${retry + 1}/3)`);
       await this._wait(1000);
@@ -270,8 +274,37 @@ class GeminiAdapter extends BrowserController {
     );
     await this._wait(500);
 
-    // 4. Insert text at Chromium level
-    await this.webContents.insertText(text);
+    // 4. Insert the whole message in one in-page operation. Chromium-level
+    // insertText slowed down as the conversation grew (14k chars took ~76s
+    // on a long page), so try a single execCommand first, verify it landed,
+    // and only fall back to insertText if it didn't.
+    this.activity(`Typing ${text.length} chars`, 'tx');
+    const t0 = Date.now();
+    const inserted = await this.webContents.executeJavaScript(
+      `(function() {` +
+      `  var el = document.querySelector(${this._safeStringify(selector)});` +
+      `  if (!el) return -1;` +
+      `  el.focus();` +
+      `  document.execCommand('insertText', false, ${this._safeStringify(text)});` +
+      `  return (el.innerText || '').length;` +
+      `})()`
+    ).catch(() => -1);
+    let method = 'execCommand';
+    if (inserted < text.length * 0.9) {
+      method = 'insertText';
+      log('warn', `gemini: single-shot insert gave ${inserted}/${text.length} chars — falling back to insertText`);
+      await this.webContents.executeJavaScript(
+        `(function() {` +
+        `  var el = document.querySelector(${this._safeStringify(selector)});` +
+        `  if (!el) return;` +
+        `  el.focus();` +
+        `  document.execCommand('selectAll');` +
+        `  document.execCommand('delete');` +
+        `})()`
+      ).catch(() => {});
+      await this.webContents.insertText(text);
+    }
+    log('info', `gemini: text entered via ${method} in ${Date.now() - t0}ms (${text.length} chars)`);
     await this._wait(500);
 
     // 5. Poke via execCommand as belt-and-suspenders for Quill
@@ -286,7 +319,10 @@ class GeminiAdapter extends BrowserController {
     await this._wait(1000);
 
     // 6. Send — with extra retries for Gemini's slow button enable
+    this.activity('Clicking send', 'tx');
+    const t1 = Date.now();
     await this.geminiSubmit();
+    log('info', `gemini: submit took ${Date.now() - t1}ms`);
 
     // 7. Snapshot body text for fallback response detection
     await this.snapshotBodyText();
@@ -365,7 +401,7 @@ class GeminiAdapter extends BrowserController {
     for (let attempt = 0; attempt < waits.length; attempt++) {
       await this._wait(waits[attempt]);
 
-      const btnSelector = await this.findSelector(this.config.sendSelectors);
+      const btnSelector = await this.findSelector(this.config.sendButton);
       if (btnSelector) {
         const clicked = await this.webContents.executeJavaScript(
           `(function() {` +
@@ -414,6 +450,7 @@ class GeminiAdapter extends BrowserController {
       }
 
       log('warn', `gemini: Send button not found (attempt ${attempt + 1}/${waits.length})`);
+      this.activity(`Send not confirmed, retrying (${attempt + 1}/${waits.length})`, 'tx');
 
       // The button existing-but-disabled usually means Angular's change
       // detection never registered the pasted text (a paste/insertText race),
@@ -421,7 +458,7 @@ class GeminiAdapter extends BrowserController {
       // fix that. Re-poke the input so it gets another chance, same recovery
       // grok's submit loop already relies on.
       if (attempt < waits.length - 1) {
-        const selector = await this.findSelector(this.config.inputSelectors);
+        const selector = await this.findSelector(this.config.promptEntry.selectors);
         if (selector) {
           await this.webContents.executeJavaScript(
             `(function() {` +

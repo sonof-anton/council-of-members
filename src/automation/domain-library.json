@@ -1,0 +1,177 @@
+{
+  "_about": "One profile per chat domain. Every profile fills the four standard attributes of a chat page: promptEntry, sendButton, response and loggedIn. Everything else is optional. '_generic' is used for any domain not listed here (e.g. an outside chat service the council consults).",
+
+  "claude.ai": {
+    "url": "https://claude.ai/new",
+    "promptEntry": {
+      "type": "contenteditable",
+      "selectors": [
+        "[data-testid='chat-input'] div.ProseMirror[contenteditable='true']",
+        "div.ProseMirror[contenteditable='true']",
+        "div[contenteditable='true']"
+      ]
+    },
+    "sendButton": [
+      "[data-testid='chat-input-send']"
+    ],
+    "response": [
+      "[data-testid='transcript-row'] [role='article']"
+    ],
+    "responseContainer": [
+      "[data-testid='transcript-list']"
+    ],
+    "loggedIn": [
+      "[data-testid='user-menu-button']"
+    ],
+    "usageLimit": [
+      "out of (?:free )?messages",
+      "(?:message|usage) limit (?:reached|exceeded)",
+      "(?:reached|hit) (?:your|the) (?:\\w+ )?(?:usage |message )?limit"
+    ],
+    "attachments": [
+      "[data-testid=\"file-thumbnail\"]"
+    ],
+    "uploadBusy": [
+      "[data-testid=\"file-thumbnail\"][aria-busy=\"true\"]",
+      "[data-testid=\"file-thumbnail\"][data-state=\"pending\"]"
+    ],
+    "modes": {
+      "picker": ["[data-testid='model-selector-dropdown']"],
+      "options": "[role='menuitemradio']",
+      "presets": {
+        "fast": [["^Low\\b"]],
+        "heavy": [["^Extra\\b", "^High\\b"]]
+      }
+    }
+  },
+
+  "grok.com": {
+    "url": "https://grok.com/",
+    "promptEntry": {
+      "type": "contenteditable",
+      "selectors": [
+        "div.ProseMirror[contenteditable='true'][aria-label='Ask Grok anything']",
+        "div.ProseMirror[contenteditable='true']",
+        "div[contenteditable='true']"
+      ]
+    },
+    "sendButton": [
+      "button[data-testid='chat-submit']",
+      "button[aria-label='Submit']",
+      "button[type='submit']"
+    ],
+    "response": [
+      "[data-testid='assistant-message']"
+    ],
+    "responseContainer": [
+      "[data-testid='drop-container']"
+    ],
+    "loggedIn": [
+      "button[aria-label^='Account menu']"
+    ],
+    "loggedOutText": "^(sign in|sign up|log in|login)$",
+    "usageLimit": [
+      "(?:reached|hit) (?:your|the) (?:\\w+ )?(?:usage |message |rate |query )?limit",
+      "too many requests",
+      "rate limit(?:ed| reached| exceeded)"
+    ],
+    "attachments": [
+      "[aria-label=\"Conversation attachments\"] [role=\"listitem\"]"
+    ],
+    "uploadBusy": [],
+    "uploadBusyText": {
+      "selector": "[aria-label=\"Conversation attachments\"] [role=\"listitem\"]",
+      "pattern": "Uploading|Processing"
+    },
+    "modes": {
+      "picker": ["button[aria-label^='Model:']"],
+      "options": "[role='menuitemradio']",
+      "presets": {
+        "fast": [["^Fast\\b"]],
+        "heavy": [["^Heavy(?![\\s\\S]*Requires)", "^Expert\\b"]]
+      }
+    }
+  },
+
+  "gemini.google.com": {
+    "url": "https://gemini.google.com/app",
+    "promptEntry": {
+      "type": "contenteditable",
+      "selectors": [
+        "div.ql-editor[role='textbox']",
+        "div.ql-editor[contenteditable='true']",
+        "div[contenteditable='true'][role='textbox']"
+      ]
+    },
+    "sendButton": [
+      "button[aria-label='Send message']",
+      "button[aria-label='Submit']"
+    ],
+    "response": [
+      ".model-response-text",
+      "message-content",
+      "[data-message-id] .markdown",
+      ".response-container .markdown",
+      ".conversation-container model-response",
+      "model-response"
+    ],
+    "responseContainer": [
+      "[class*='response-container']",
+      ".conversation-container"
+    ],
+    "loggedIn": [
+      "a[aria-label^='Google Account']"
+    ],
+    "usageLimit": [
+      "(?:reached|hit) (?:your|the) (?:\\w+ )?(?:usage |message |daily )?limit",
+      "limit (?:resets|will reset)"
+    ],
+    "uploadMenu": [
+      "button[aria-label=\"Upload & tools\"]"
+    ],
+    "attachments": [
+      "uploader-file-preview"
+    ],
+    "uploadBusy": [
+      ".gem-attachment-loading-container",
+      ".gem-attachment-content.loading",
+      "uploader-file-preview mat-spinner"
+    ],
+    "modes": {
+      "picker": ["button[aria-label^='Open mode picker']"],
+      "options": "gem-menu-item, [role='menuitem']",
+      "presets": {
+        "fast": [["\\bFlash\\b(?!-)"]],
+        "heavy": [["\\bPro\\b"]]
+      }
+    }
+  },
+
+  "_generic": {
+    "promptEntry": {
+      "type": "auto",
+      "selectors": [
+        "textarea:not([disabled])",
+        "[contenteditable='true'][role='textbox']",
+        "div[contenteditable='true']",
+        "input[type='text'][placeholder]"
+      ]
+    },
+    "sendButton": [
+      "button[type='submit']",
+      "button[aria-label*='send' i]",
+      "button[data-testid*='send' i]",
+      "button[title*='send' i]"
+    ],
+    "response": [],
+    "loggedIn": [],
+    "usageLimit": [],
+    "launcher": [
+      "button[aria-label*='chat' i]",
+      "[role='button'][aria-label*='chat' i]",
+      "button[title*='chat' i]",
+      "[class*='launcher' i] button",
+      "button[class*='launcher' i]"
+    ]
+  }
+}

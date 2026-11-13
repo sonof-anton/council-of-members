@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
-    "test": "node --test test/protocol/*.test.js"
+    "test": "node --test test/protocol/*.test.js test/automation/*.test.js"
   },
   "devDependencies": {
     "electron": "^33.0.0",

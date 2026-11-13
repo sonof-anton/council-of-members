@@ -153,6 +153,11 @@
   var loginState = { claude: false, grok: false, gemini: false };
   var autoSwitchedFromLogin = false;
 
+  var MEMBER_IDS = ['claude', 'grok', 'gemini'];
+  var MEMBER_LABELS = { claude: 'MEMBER 1', grok: 'MEMBER 2', gemini: 'MEMBER 3' };
+  function memberLabel(name) { return MEMBER_LABELS[name] || name.toUpperCase(); }
+  var memberStatus = {}; // last status per member, for the ADVANCE button
+
   // ========== CHANCELLOR INPUT ==========
   var busy = false;
   var currentRound = 0;
@@ -179,6 +184,10 @@
 
     // Clear previous session's response history
     renderedResponses = {};
+    memberStatus = {};
+    resetIndicators();
+    hideConsult();
+    setModeControlsEnabled(false);
     var histories = document.querySelectorAll('.ai-response-history');
     histories.forEach(function (h) { h.innerHTML = ''; });
     // Hide previous consensus
@@ -193,6 +202,8 @@
       document.getElementById('btn-send').style.display = 'inline-block';
       document.getElementById('btn-abort').style.display = 'none';
       inputEl.disabled = false;
+      setModeControlsEnabled(true);
+      updateAdvanceButton();
     });
   }
 
@@ -218,6 +229,7 @@
     COLLECTING: 'COLLECTING .RX',
     COMBINING: 'COMBINING RESPONSES',
     UNIFYING: 'MEMBERS AGREE — UNIFYING ANSWER...',
+    CONSULTING: 'CONSULTING AN OUTSIDE SOURCE...',
     CONSENSUS: '.RX CONSENSUS ACK',
     TIMEOUT: 'TIMEOUT - NO CONSENSUS',
     ABORTED: 'SESSION ABORTED'
@@ -230,6 +242,7 @@
     COLLECTING: 'waiting',
     COMBINING: 'waiting',
     UNIFYING: 'waiting',
+    CONSULTING: 'waiting',
     CONSENSUS: 'responded',
     TIMEOUT: 'error',
     ABORTED: 'error'
@@ -284,7 +297,7 @@
       memberHeader.style.marginBottom = '8px';
       memberHeader.style.borderBottom = '1px solid var(--dim-green)';
       memberHeader.style.paddingBottom = '4px';
-      memberHeader.textContent = '=== ' + name.toUpperCase() + ' ===';
+      memberHeader.textContent = '=== ' + memberLabel(name) + ' ===';
 
       var memberBody = document.createElement('div');
       memberBody.style.whiteSpace = 'pre-wrap';
@@ -315,7 +328,7 @@
     el.textContent = phase;
     var cls = {
       IDLE: 'status-info', TRANSMITTING: 'status-waiting', WAITING: 'status-waiting',
-      COLLECTING: 'status-waiting', COMBINING: 'status-waiting',
+      COLLECTING: 'status-waiting', COMBINING: 'status-waiting', UNIFYING: 'status-waiting', CONSULTING: 'status-waiting',
       CONSENSUS: 'status-responded', TIMEOUT: 'status-error', ABORTED: 'status-error'
     };
     el.className = '';
@@ -336,8 +349,9 @@
     var statusEl = col.querySelector('.ai-status');
     var voteEl = col.querySelector('.ai-vote');
 
-    var statusLabels = { STANDBY: 'STANDBY', TRANSMITTING: '.TX TYPING...', WAITING: 'WAITING .RX', RESPONDED: '.RX RECEIVED', ERROR: 'ERROR', SKIPPED: 'SKIPPED' };
-    var statusClasses = { STANDBY: 'status-info', TRANSMITTING: 'status-waiting', WAITING: 'status-waiting', RESPONDED: 'status-responded', ERROR: 'status-error', SKIPPED: 'status-error' };
+    var statusLabels = { STANDBY: 'STANDBY', TRANSMITTING: '.TX TYPING...', WAITING: 'WAITING .RX', RESPONDED: '.RX RECEIVED', ERROR: 'ERROR', SKIPPED: 'SKIPPED', LIMIT: 'USAGE LIMIT' };
+    var statusClasses = { STANDBY: 'status-info', TRANSMITTING: 'status-waiting', WAITING: 'status-waiting', RESPONDED: 'status-responded', ERROR: 'status-error', SKIPPED: 'status-error', LIMIT: 'status-error' };
+    memberStatus[name] = status;
 
     statusEl.textContent = statusLabels[status] || status;
     statusEl.className = 'ai-status';
@@ -356,11 +370,20 @@
 
     // Timer/skip/wait visibility
     var timerEl = col.querySelector('.ai-timer');
-    var skipBtn = col.querySelector('.btn-skip');
+    var skipBtn = col.querySelector('.btn-skip:not(.btn-retry):not(.btn-force)');
+    var retryBtn = col.querySelector('.btn-retry');
+    var forceBtn = col.querySelector('.btn-force');
+    var stuckOrOut = status === 'ERROR' || status === 'SKIPPED' || status === 'LIMIT';
+    if (retryBtn) retryBtn.style.display = stuckOrOut ? '' : 'none';
+    if (forceBtn) forceBtn.style.display = (stuckOrOut || status === 'WAITING' || status === 'TRANSMITTING') ? '' : 'none';
     var waitBtn = col.querySelector('.btn-wait');
     if (status === 'WAITING') {
       if (timerEl) timerEl.style.display = '';
       memberTimers[name] = Date.now();
+      // The Chancellor can always skip or wait on a pending member, not
+      // only in the last moments of its timeout
+      if (skipBtn) skipBtn.style.display = '';
+      if (waitBtn && !memberWaiting[name]) waitBtn.style.display = '';
     } else {
       if (timerEl) { timerEl.style.display = 'none'; timerEl.textContent = ''; }
       if (skipBtn) skipBtn.style.display = 'none';
@@ -368,6 +391,7 @@
       delete memberTimers[name];
       delete memberWaiting[name];
     }
+    updateAdvanceButton();
 
     // Also update Level 3 status
     var l3col = document.querySelector('.l3-ai-col[data-ai="' + name + '"]');
@@ -455,6 +479,171 @@
     logEl.scrollTop = logEl.scrollHeight;
   }
 
+  // ========== ACTIVITY / INDICATORS ==========
+  // limit and error stay lit once set; the others show the current step only
+  var STICKY_INDICATORS = ['limit', 'error'];
+
+  function resetIndicators() {
+    document.querySelectorAll('.ai-indicators .ind').forEach(function (el) { el.classList.remove('on'); });
+    document.querySelectorAll('.ai-activity').forEach(function (el) { el.textContent = '--'; el.className = 'ai-activity status-info'; });
+  }
+
+  function setActivity(name, text, ind) {
+    var col = document.querySelector('.ai-column[data-ai="' + name + '"]');
+    if (!col) return;
+    var el = col.querySelector('.ai-activity');
+    if (el) {
+      el.textContent = text || '--';
+      el.className = 'ai-activity ' + (ind === 'limit' || ind === 'error' ? 'status-error' : ind === 'done' ? 'status-responded' : 'status-waiting');
+    }
+    if (!ind) return;
+    col.querySelectorAll('.ai-indicators .ind').forEach(function (chip) {
+      var key = chip.dataset.ind;
+      if (key === ind) chip.classList.add('on');
+      else if (STICKY_INDICATORS.indexOf(key) === -1) chip.classList.remove('on');
+    });
+  }
+
+  function updateAdvanceButton() {
+    var btn = document.getElementById('btn-advance');
+    if (!btn) return;
+    var waiting = MEMBER_IDS.some(function (n) { return memberStatus[n] === 'WAITING'; });
+    btn.style.display = busy && waiting ? '' : 'none';
+  }
+
+  // ========== OUTSIDE CONSULTATION ==========
+  function hideConsult() {
+    document.getElementById('consult-panel').classList.remove('visible');
+    document.getElementById('status-consult').textContent = '';
+  }
+
+  function showConsult(data) {
+    var panel = document.getElementById('consult-panel');
+    var header = document.getElementById('consult-header');
+    var statusText = { ASKING: 'CONSULTING ' + data.host.toUpperCase() + '...', REPLIED: 'CONSULTED ' + data.host.toUpperCase(), FAILED: 'CONSULTATION FAILED: ' + data.host.toUpperCase() };
+    header.textContent = statusText[data.status] || data.host;
+    header.className = data.status === 'FAILED' ? 'status-error' : data.status === 'REPLIED' ? 'status-responded' : 'status-waiting';
+    document.getElementById('consult-question').textContent = 'Q: ' + data.question;
+    document.getElementById('consult-activity').textContent = data.status === 'ASKING' ? (data.activity || '') : (data.error || '');
+    document.getElementById('consult-reply').textContent = data.reply ? 'REPLY: ' + data.reply : '';
+    panel.classList.add('visible');
+    var l2 = document.getElementById('status-consult');
+    l2.textContent = header.textContent;
+    l2.className = header.className;
+  }
+
+  // ========== MODES ==========
+  function setModeControlsEnabled(enabled) {
+    document.querySelectorAll('.btn-preset, .mode-current').forEach(function (b) { b.disabled = !enabled; });
+    if (!enabled) closeModeMenus();
+  }
+
+  function closeModeMenus() {
+    document.querySelectorAll('.mode-menu').forEach(function (m) { m.classList.remove('open'); m.innerHTML = ''; });
+  }
+
+  function showModes(modes) {
+    MEMBER_IDS.forEach(function (name) {
+      var mode = modes[name];
+      if (mode === undefined) return;
+      var btn = document.querySelector('.mode-current[data-ai="' + name + '"]');
+      if (btn && !btn.classList.contains('busy')) btn.textContent = mode || '--';
+      var col = document.querySelector('.ai-column[data-ai="' + name + '"]');
+      var el = col && col.querySelector('.ai-mode');
+      if (el) el.textContent = mode || '--';
+    });
+  }
+
+  function modeNotice(text, type) {
+    if (!busy) showStatus(text, type);
+  }
+
+  function openModeMenu(name) {
+    var wrap = document.querySelector('.mode-member[data-ai="' + name + '"]');
+    var menu = wrap.querySelector('.mode-menu');
+    var wasOpen = menu.classList.contains('open');
+    closeModeMenus();
+    if (wasOpen || busy) return;
+    menu.textContent = 'READING OPTIONS...';
+    menu.classList.add('open');
+    window.council.listModes(name).then(function (options) {
+      menu.innerHTML = '';
+      if (!options || options.length === 0) {
+        menu.textContent = 'NO OPTIONS FOUND';
+        return;
+      }
+      options.forEach(function (opt) {
+        var item = document.createElement('button');
+        item.className = 'mode-option' + (opt.checked ? ' checked' : '');
+        item.disabled = opt.disabled;
+        item.textContent = (opt.checked ? '> ' : '  ') + opt.text;
+        item.addEventListener('click', function () {
+          closeModeMenus();
+          var btn = wrap.querySelector('.mode-current');
+          btn.classList.add('busy');
+          btn.textContent = 'SWITCHING...';
+          window.council.selectMode(name, opt.text).then(function (mode) {
+            btn.classList.remove('busy');
+            var m = {}; m[name] = mode; showModes(m);
+            modeNotice(memberLabel(name) + ' MODE: ' + mode, 'info');
+          }).catch(function (err) {
+            btn.classList.remove('busy');
+            modeNotice('MODE CHANGE FAILED: ' + err.message, 'error');
+            window.council.getModes().then(showModes);
+          });
+        });
+        menu.appendChild(item);
+      });
+    }).catch(function (err) {
+      menu.textContent = 'FAILED: ' + err.message;
+    });
+  }
+
+  function applyPreset(preset) {
+    if (busy) return;
+    closeModeMenus();
+    document.querySelectorAll('.mode-current').forEach(function (b) { b.classList.add('busy'); b.textContent = 'SWITCHING...'; });
+    setModeControlsEnabled(false);
+    window.council.applyModePreset(preset).then(function (result) {
+      var modes = {};
+      var failed = [];
+      MEMBER_IDS.forEach(function (name) {
+        var r = result[name] || {};
+        modes[name] = r.mode;
+        if (r.error) failed.push(memberLabel(name));
+      });
+      document.querySelectorAll('.mode-current').forEach(function (b) { b.classList.remove('busy'); });
+      showModes(modes);
+      setModeControlsEnabled(true);
+      modeNotice(preset.toUpperCase() + ' MODE' + (failed.length ? ' — NOT APPLIED ON ' + failed.join(', ') : ' APPLIED'), failed.length ? 'error' : 'responded');
+    }).catch(function (err) {
+      document.querySelectorAll('.mode-current').forEach(function (b) { b.classList.remove('busy'); });
+      setModeControlsEnabled(true);
+      modeNotice('MODE CHANGE FAILED: ' + err.message, 'error');
+      window.council.getModes().then(showModes);
+    });
+  }
+
+  // ========== LOGIN TAB ==========
+  // Once every member is logged in the login tab shrinks to a small check
+  // mark; it widens again, in red, as soon as any member is logged out.
+  function updateLoginTab(status) {
+    var btn = document.querySelector('#view-switcher button[data-level="0"]');
+    if (!btn) return;
+    var out = MEMBER_IDS.filter(function (n) { return !status[n]; });
+    if (out.length === 0) {
+      btn.textContent = 'LVL 0 ✓';
+      btn.title = 'All members logged in';
+      btn.classList.add('login-ok');
+      btn.classList.remove('login-needed');
+    } else {
+      btn.textContent = 'LVL 0 // LOGIN (' + out.map(memberLabel).join(', ') + ' LOGGED OUT)';
+      btn.title = '';
+      btn.classList.remove('login-ok');
+      btn.classList.add('login-needed');
+    }
+  }
+
   // ========== INIT ==========
   function init() {
     // View switcher
@@ -506,7 +695,24 @@
       // Start collapsed
       document.querySelector('.constitution-body').style.display = 'none';
       constHeader.textContent = 'CONSTITUTION [+]';
+      window.council.getConstitution().then(function (src) {
+        document.querySelector('.constitution-body').textContent = src;
+      });
     }
+
+    // Modes
+    document.querySelectorAll('.btn-preset').forEach(function (btn) {
+      btn.addEventListener('click', function () { applyPreset(btn.dataset.preset); });
+    });
+    document.querySelectorAll('.mode-current').forEach(function (btn) {
+      btn.addEventListener('click', function () { openModeMenu(btn.dataset.ai); });
+    });
+    window.council.onModes(showModes);
+    window.council.onMemberActivity(function (data) { setActivity(data.name, data.text, data.ind); });
+    window.council.onConsultStatus(showConsult);
+    document.getElementById('btn-advance').addEventListener('click', function () {
+      window.council.advanceRound();
+    });
 
     // File drag and drop
     initFileDrop();
@@ -539,7 +745,7 @@
       // Show all individual member answers before unification
       var parts = [];
       for (var name in data.answers) {
-        parts.push('=== ' + name.toUpperCase() + ' ===');
+        parts.push('=== ' + memberLabel(name) + ' ===');
         parts.push(data.answers[name]);
         parts.push('');
       }
@@ -583,23 +789,6 @@
           el.style.display = '';
         }
       });
-      // Show skip and wait buttons when 30s or less remaining
-      var skipBtns = document.querySelectorAll('.btn-skip');
-      skipBtns.forEach(function (btn) {
-        var aiName = btn.dataset.ai;
-        var remaining = remainingByAi[aiName];
-        if (memberTimers[aiName] !== undefined && remaining !== undefined && remaining <= 30) {
-          btn.style.display = '';
-        }
-      });
-      var waitBtns = document.querySelectorAll('.btn-wait');
-      waitBtns.forEach(function (btn) {
-        var aiName = btn.dataset.ai;
-        var remaining = remainingByAi[aiName];
-        if (memberTimers[aiName] !== undefined && remaining !== undefined && remaining <= 30 && !memberWaiting[aiName]) {
-          btn.style.display = '';
-        }
-      });
     });
 
     // Thought display handler
@@ -608,7 +797,7 @@
       if (!col) return;
       var el = col.querySelector('.ai-thought');
       if (el) {
-        el.textContent = data.thought;
+        el.textContent = data.thought || '--';
         el.className = 'ai-thought status-waiting';
       }
     });
@@ -668,6 +857,7 @@
     // Login status listener
     window.council.onLoginStatus(function (status) {
       loginState = status;
+      updateLoginTab(status);
 
       // Update Level 2 login indicators
       ['claude', 'grok', 'gemini'].forEach(function (name) {
@@ -704,8 +894,21 @@
       }
     });
 
+    // RETRY / FORCE handlers
+    document.querySelectorAll('.btn-retry, .btn-force').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var aiName = btn.dataset.ai;
+        var call = btn.classList.contains('btn-retry') ? window.council.retryMember : window.council.forceMember;
+        btn.disabled = true;
+        Promise.resolve(call(aiName)).then(function (res) {
+          if (res && !res.success && res.reason) alert(res.reason);
+        }).catch(function (err) { alert(err.message || String(err)); })
+          .finally(function () { btn.disabled = false; });
+      });
+    });
+
     // Skip button handlers
-    var skipBtns = document.querySelectorAll('.btn-skip');
+    var skipBtns = document.querySelectorAll('.btn-skip:not(.btn-retry):not(.btn-force)');
     skipBtns.forEach(function (btn) {
       btn.addEventListener('click', function () {
         var aiName = btn.dataset.ai;

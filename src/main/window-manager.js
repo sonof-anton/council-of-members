@@ -107,6 +107,22 @@ class WindowManager {
     this.layout();
   }
 
+  // A panel whose page loaded while covered by the UI can stay
+  // document.hidden (seen on Gemini when it finished loading after the
+  // startup uncover); Gemini then ignores send clicks. Uncovering the panels
+  // for a moment marks them visible, and they stay so once covered again.
+  revealPanels() {
+    if (this.currentLevel === 0 || this.currentLevel === 3) return Promise.resolve();
+    if (this._revealing) return this._revealing;
+    this.setUiOnTop(false);
+    this._revealing = new Promise((resolve) => setTimeout(() => {
+      if (this.currentLevel !== 0 && this.currentLevel !== 3) this.setUiOnTop(true);
+      this._revealing = null;
+      resolve();
+    }, 400));
+    return this._revealing;
+  }
+
   // Measure the actual bottom edge of the header content above the browser
   // panels, instead of guessing a fixed pixel offset — the header heights
   // depend on CSS (font metrics, padding) and drift out of sync with any

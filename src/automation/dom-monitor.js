@@ -10,18 +10,61 @@ const { log } = require('../utils/logger.js');
 // gate as if it were a real, stable final answer.
 const MIN_RESPONSE_LENGTH = 500;
 
+// How often (in polls) to scan the page for a usage-limit notice
+const LIMIT_CHECK_EVERY = 10;
+
+function usageLimitError(aiName, notice) {
+  const err = new Error(`${aiName}: usage limit reached: ${notice}`);
+  err.code = 'USAGE_LIMIT';
+  return err;
+}
+
 class DomMonitor {
   constructor(controller) {
     this.controller = controller;
+    this.lastThought = '';
+  }
+
+  // Thoughts mirror the member's own window: short in-progress text
+  // ("Analyzing the request...") shows while it is on screen and clears the
+  // moment it is replaced by the real answer or disappears.
+  setThought(text) {
+    const lines = text ? text.split('\n').map(l => l.trim()).filter(Boolean) : [];
+    const thought = (lines.pop() || '').substring(0, 80);
+    if (thought === this.lastThought) return;
+    this.lastThought = thought;
+    if (this.controller.onThought) this.controller.onThought(thought);
+  }
+
+  // A short reply is a thought; once it reaches answer length, or the
+  // answer itself has started streaming in, it is not.
+  trackThought(text) {
+    const isThought = text && text.length < MIN_RESPONSE_LENGTH && !text.startsWith('[Round ') &&
+      !/^\W*(?:ANSWER|RESULT)\W*:/im.test(text);
+    this.setThought(isThought ? text : '');
+  }
+
+  activity(text, ind) {
+    if (this.controller.onActivity) this.controller.onActivity(text, ind);
   }
 
   // baselineBefore: last response text captured before the message was sent
   // (preferred); when omitted it is read now, which can be too late.
   async waitForResponse(countBefore, baselineBefore) {
+    this.lastThought = '';
+    try {
+      return await this._waitForResponse(countBefore, baselineBefore);
+    } finally {
+      this.setThought('');
+    }
+  }
+
+  async _waitForResponse(countBefore, baselineBefore) {
     const startTime = Date.now();
     const aiName = this.controller.aiName;
     const timeoutMs = (RESPONSE_TIMEOUT_PER_MEMBER && RESPONSE_TIMEOUT_PER_MEMBER[aiName]) || RESPONSE_TIMEOUT_MS;
     let lastText = '';
+    let lastIgnoredText = null;
     let stableCount = 0;
     const STABLE_THRESHOLD = 8; // 4 seconds at 500ms intervals (was 6/3s — too aggressive)
 
@@ -40,6 +83,7 @@ class DomMonitor {
     let textStableCount = 0;
 
     log('info', `${aiName}: Polling for new response (count before: ${countBefore})`);
+    this.activity('Waiting for reply to start', 'wait');
     let pollCount = 0;
     let lastLoggedAt = startTime;
 
@@ -49,6 +93,13 @@ class DomMonitor {
       }
       const currentCount = await this.controller.getResponseCount();
       pollCount++;
+
+      // A member out of messages never answers; drop it now instead of
+      // waiting out its full timeout.
+      if (pollCount % LIMIT_CHECK_EVERY === 0 && this.controller.detectUsageLimit) {
+        const notice = await this.controller.detectUsageLimit();
+        if (notice) throw usageLimitError(aiName, notice);
+      }
 
       // Log progress every 30 seconds so we can diagnose stuck polling
       const now = Date.now();
@@ -84,13 +135,19 @@ class DomMonitor {
         log('info', `${aiName}: Activating text-change fallback (baseline: ${baselineText ? baselineText.length + ' chars' : 'null'})`);
       }
 
+      if (currentCount <= countBefore) {
+        this.activity(`Waiting for reply to start (${elapsedSec}s)${textFallbackActive ? ' · watching text' : ''}`, 'wait');
+      }
+
       if (textFallbackActive && currentCount <= countBefore) {
         const currentText = await this.controller.getLastResponseText().catch(() => null);
+        if (currentText && currentText !== baselineText) this.trackThought(currentText);
         if (currentText && currentText.length >= MIN_RESPONSE_LENGTH && !currentText.startsWith('[Round ')) {
           // Check if text differs from baseline (new response appeared)
           if (currentText !== baselineText) {
             if (currentText === lastText) {
               textStableCount++;
+              this.activity(`Reply settling ${textStableCount}/${STABLE_THRESHOLD} (${currentText.length} chars)`, 'settle');
               if (textStableCount >= STABLE_THRESHOLD) {
                 log('info', `${aiName}: Response detected via text-change fallback (${currentText.length} chars)`);
                 return currentText;
@@ -98,6 +155,7 @@ class DomMonitor {
             } else {
               textStableCount = 0;
               lastText = currentText;
+              this.activity(`Reply streaming (${currentText.length} chars)`, 'stream');
             }
           }
         }
@@ -117,6 +175,20 @@ class DomMonitor {
             continue;
           }
 
+          // The new response element can exist before it has any text; a
+          // fallback scan then returns the PREVIOUS reply (Gemini, round 5
+          // of 2026-11-10 relayed round 4's answer verbatim). Never accept
+          // text identical to the pre-send baseline: a 60s grace period was
+          // tried and failed, since Gemini can think for over a minute on a
+          // long unification prompt while the old answer sits on the page.
+          if (baselineText && text === baselineText) {
+            this.activity(`Reply not started yet (${elapsedSec}s)`, 'wait');
+            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+            continue;
+          }
+
+          this.trackThought(text);
+
           // Definitive completion: END marker found AND response is substantial
           if (text.includes(END_MARKER) && text.length >= MIN_RESPONSE_LENGTH) {
             log('info', `${aiName}: END marker found (${text.length} chars)`);
@@ -126,6 +198,11 @@ class DomMonitor {
           // Check if text stopped changing (AI finished generating)
           if (text === lastText) {
             stableCount++;
+            if (text.length >= MIN_RESPONSE_LENGTH) {
+              this.activity(`Reply settling ${stableCount}/${STABLE_THRESHOLD} (${text.length} chars)`, 'settle');
+            } else {
+              this.activity(`Short status on screen (${text.length} chars)`, 'stream');
+            }
             if (stableCount >= STABLE_THRESHOLD) {
               // Only accept if response is substantial enough
               if (text.length >= MIN_RESPONSE_LENGTH) {
@@ -137,13 +214,20 @@ class DomMonitor {
                 // timeout on it just stalls the round.
                 const siteError = this.controller.detectSiteError && this.controller.detectSiteError(text);
                 if (siteError) {
-                  throw new Error(`${aiName}: site returned an error: ${siteError}`);
+                  const err = new Error(`${aiName}: site returned an error: ${siteError}`);
+                  err.code = 'SITE_ERROR';
+                  throw err;
                 }
-                // Too short — likely an intermediate status or loading indicator.
-                // Emit as a "thought" so the UI can display it, but keep waiting.
-                log('warn', `${aiName}: Ignoring short stable text (${text.length} chars): ${text.substring(0, 80)}`);
-                if (this.controller.onThought) {
-                  this.controller.onThought(text.substring(0, 80));
+                // So is an out-of-messages reply
+                const limit = this.controller.matchUsageLimit && this.controller.matchUsageLimit(text);
+                if (limit) throw usageLimitError(aiName, limit);
+                // Too short — likely an intermediate status or loading indicator;
+                // it shows as a thought (trackThought above). Keep waiting.
+                // Once per distinct text — a member thinking for minutes
+                // otherwise logs the same line every 4s.
+                if (text !== lastIgnoredText) {
+                  log('warn', `${aiName}: Ignoring short stable text (${text.length} chars): ${text.substring(0, 80)}`);
+                  lastIgnoredText = text;
                 }
                 stableCount = 0;
                 // Don't reset lastText — if the same short text persists,
@@ -153,6 +237,7 @@ class DomMonitor {
           } else {
             stableCount = 0;
             lastText = text;
+            this.activity(`Reply streaming (${text.length} chars)`, 'stream');
           }
         }
       }
@@ -216,3 +301,4 @@ class DomMonitor {
 }
 
 module.exports = DomMonitor;
+module.exports.MIN_RESPONSE_LENGTH = MIN_RESPONSE_LENGTH;

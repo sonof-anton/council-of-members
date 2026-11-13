@@ -9,6 +9,8 @@ const ClaudeAdapter = require('../automation/adapters/claude-adapter.js');
 const GrokAdapter = require('../automation/adapters/grok-adapter.js');
 const GeminiAdapter = require('../automation/adapters/gemini-adapter.js');
 const Router = require('../protocol/router.js');
+const { getConstitutionSource } = require('../protocol/message-formatter.js');
+const { consultOutside } = require('./consult-window.js');
 
 let router = null;
 let sessionRunning = false;
@@ -20,17 +22,26 @@ const adapterClasses = {
   gemini: GeminiAdapter
 };
 
+function createControllers(windowManager) {
+  const views = windowManager.getAllViews();
+  const controllers = {};
+  for (const name of AI_NAMES) {
+    const AdapterClass = adapterClasses[name];
+    controllers[name] = new AdapterClass(views[name].webContents);
+    controllers[name].revealPanels = () => windowManager.revealPanels();
+  }
+  return controllers;
+}
+
 function registerIpcHandlers(mainWindow, windowManager) {
+  // Login polling and mode changes run outside sessions on their own
+  // controllers, so they never share callbacks with a running router.
+  const idleControllers = createControllers(windowManager);
+
   function createRouter() {
-    const views = windowManager.getAllViews();
-    const controllers = {};
+    const controllers = createControllers(windowManager);
 
-    for (const name of AI_NAMES) {
-      const AdapterClass = adapterClasses[name];
-      controllers[name] = new AdapterClass(views[name].webContents);
-    }
-
-    router = new Router(controllers);
+    router = new Router(controllers, { consult: consultOutside });
 
     router.on('phase-change', (data) => {
       windowManager.uiView.webContents.send('council:phase-change', data);
@@ -70,6 +81,14 @@ function registerIpcHandlers(mainWindow, windowManager) {
 
     router.on('perf-update', (data) => {
       windowManager.uiView.webContents.send('council:perf-update', data);
+    });
+
+    router.on('member-activity', (data) => {
+      windowManager.uiView.webContents.send('council:member-activity', data);
+    });
+
+    router.on('consult-status', (data) => {
+      windowManager.uiView.webContents.send('council:consult-status', data);
     });
 
     return router;
@@ -127,6 +146,65 @@ function registerIpcHandlers(mainWindow, windowManager) {
       return { success: true };
     }
     return { success: false, reason: 'No active session' };
+  });
+
+  ipcMain.handle('council:retry-member', async (_event, name) => {
+    if (router && sessionRunning) return router.retryMember(name);
+    return { success: false, reason: 'No active session' };
+  });
+
+  ipcMain.handle('council:force-member', async (_event, name) => {
+    if (router && sessionRunning) return router.forceMember(name);
+    return { success: false, reason: 'No active session' };
+  });
+
+  ipcMain.handle('council:advance-round', async () => {
+    if (router && sessionRunning) {
+      return { success: router.advanceRound() };
+    }
+    return { success: false, reason: 'No active session' };
+  });
+
+  ipcMain.handle('council:get-constitution', async () => getConstitutionSource());
+
+  // ===== Modes =====
+  // Changing a model mid-session would change who answers between rounds
+  function modeGuard(name) {
+    if (sessionRunning) throw new Error('Modes can only change between sessions');
+    if (name && !idleControllers[name]) throw new Error(`Unknown member: ${name}`);
+  }
+
+  ipcMain.handle('council:get-modes', async () => {
+    const modes = {};
+    for (const name of AI_NAMES) modes[name] = await idleControllers[name].getMode();
+    return modes;
+  });
+
+  ipcMain.handle('council:list-modes', async (_event, name) => {
+    modeGuard(name);
+    return idleControllers[name].listModes();
+  });
+
+  ipcMain.handle('council:select-mode', async (_event, name, optionText) => {
+    modeGuard(name);
+    const escaped = String(optionText).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const picked = await idleControllers[name].selectMode([`^${escaped}$`]);
+    if (!picked) throw new Error(`${name}: option "${optionText}" not found`);
+    return idleControllers[name].getMode();
+  });
+
+  // Global FAST / HEAVY buttons: each member's preset from its domain profile
+  ipcMain.handle('council:apply-mode-preset', async (_event, preset) => {
+    modeGuard();
+    const result = {};
+    await Promise.all(AI_NAMES.map(async (name) => {
+      try {
+        result[name] = { mode: await idleControllers[name].applyModePreset(preset) };
+      } catch (err) {
+        result[name] = { error: err.message, mode: await idleControllers[name].getMode() };
+      }
+    }));
+    return result;
   });
 
   ipcMain.handle('council:wait-member', async (_event, name) => {
@@ -224,7 +302,7 @@ function registerIpcHandlers(mainWindow, windowManager) {
   });
 
   // Start login polling
-  startLoginPolling(mainWindow, windowManager);
+  startLoginPolling(windowManager, idleControllers);
 }
 
 // Attachments arrive as { name, path } when the file came from disk, or
@@ -243,44 +321,30 @@ function resolveAttachments(files) {
   });
 }
 
-function startLoginPolling(mainWindow, windowManager) {
-  const selectorsPath = path.join(__dirname, '..', 'automation', 'selectors.json');
-  const selectors = JSON.parse(fs.readFileSync(selectorsPath, 'utf-8'));
-
+// Every 5s: each member's logged-in state (the domain profile's loggedIn
+// marker, not just a prompt box — Grok and Gemini let logged-out visitors
+// chat) and its current mode, for the login tab and the mode readouts.
+function startLoginPolling(windowManager, controllers) {
   if (loginPollInterval) {
     clearInterval(loginPollInterval);
   }
 
-  loginPollInterval = setInterval(async () => {
-    const views = windowManager.getAllViews();
+  const poll = async () => {
     const status = {};
-
+    const modes = {};
+    let hidden = false;
     for (const name of AI_NAMES) {
-      if (!views[name] || !views[name].webContents) {
-        status[name] = false;
-        continue;
-      }
-
-      const inputSels = selectors[name].inputSelectors;
-      const selectorChecks = inputSels.map(s => JSON.stringify(s)).join(', ');
-
-      try {
-        status[name] = await views[name].webContents.executeJavaScript(
-          `(function() {
-            var sels = [${selectorChecks}];
-            for (var i = 0; i < sels.length; i++) {
-              if (document.querySelector(sels[i])) return true;
-            }
-            return false;
-          })()`
-        );
-      } catch (e) {
-        status[name] = false;
-      }
+      status[name] = await controllers[name].isLoggedIn().catch(() => false);
+      modes[name] = await controllers[name].getMode().catch(() => null);
+      hidden = hidden || await controllers[name].isPageHidden();
     }
-
+    // Keep every member page marked visible between sessions too
+    if (hidden) await windowManager.revealPanels();
     windowManager.uiView.webContents.send('council:login-status', status);
-  }, 5000);
+    windowManager.uiView.webContents.send('council:modes', modes);
+  };
+  loginPollInterval = setInterval(poll, 5000);
+  setTimeout(poll, 1500);
 }
 
 module.exports = { registerIpcHandlers };

@@ -19,10 +19,8 @@
     <!-- Constitution (below tabs, toggleable) -->
     <div id="constitution-display">
       <div class="constitution-header">CONSTITUTION [+]</div>
-      <pre class="constitution-body" style="display:none;">1. This process follows the scientific method: propose, review, critique, refine.
-2. All three participants have equal standing. The human user asked the question.
-3. Follow the structured format exactly.
-4. Productive disagreement is expected and valuable.</pre>
+      <!-- Filled from src/protocol/message-formatter.js at startup: the exact code the members are sent -->
+      <pre class="constitution-body" style="display:none;"></pre>
     </div>
 
     <!-- Level 0: Login -->
@@ -66,7 +64,21 @@
           <button id="btn-abort" style="display:none;">.ABORT</button>
           <button id="btn-send">.TX</button>
         </div>
+        <div id="mode-bar">
+          <span class="mode-bar-label">MODE</span>
+          <button class="btn-preset" data-preset="fast">.FAST</button>
+          <button class="btn-preset" data-preset="heavy">.HEAVY</button>
+          <div class="mode-member" data-ai="claude"><span class="mode-member-label">M1</span><button class="mode-current" data-ai="claude">--</button><div class="mode-menu"></div></div>
+          <div class="mode-member" data-ai="grok"><span class="mode-member-label">M2</span><button class="mode-current" data-ai="grok">--</button><div class="mode-menu"></div></div>
+          <div class="mode-member" data-ai="gemini"><span class="mode-member-label">M3</span><button class="mode-current" data-ai="gemini">--</button><div class="mode-menu"></div></div>
+        </div>
         <div id="chancellor-status"></div>
+        <div id="consult-panel">
+          <div id="consult-header"></div>
+          <div id="consult-question"></div>
+          <div id="consult-activity"></div>
+          <div id="consult-reply"></div>
+        </div>
       </div>
       <div id="consensus-area">
         <div id="consensus-header">.RX CONSENSUS</div>
@@ -80,6 +92,8 @@
       <div id="status-bar">
         <span id="status-round">ROUND --</span>
         <span id="status-phase">IDLE</span>
+        <span id="status-consult"></span>
+        <button id="btn-advance" title="Stop waiting on members still pending and continue with the answers already in" style="display:none;">.ADVANCE ROUND</button>
         <button id="btn-diag" style="padding:2px 8px;font-size:10px;">.DIAG</button>
       </div>
       <div id="ai-columns">
@@ -89,6 +103,8 @@
             <span class="ai-timer" data-ai="claude"></span>
             <button class="btn-wait" data-ai="claude" style="display:none;">.WAIT</button>
             <button class="btn-skip" data-ai="claude" style="display:none;">.SKIP</button>
+            <button class="btn-skip btn-retry" data-ai="claude" title="Bring this member back and watch it again" style="display:none;">.RETRY</button>
+            <button class="btn-skip btn-force" data-ai="claude" title="Push past what it is stuck on: stop an upload wait and send, or take the reply on screen now" style="display:none;">.FORCE</button>
           </div>
           <div class="ai-column-body">
             <div class="ai-field ai-login-field">
@@ -98,6 +114,24 @@
             <div class="ai-field">
               <div class="ai-field-label">STATUS</div>
               <div class="ai-status status-info">STANDBY</div>
+              <div class="ai-indicators">
+                <span class="ind" data-ind="tx" title="Typing / sending">TX</span>
+                <span class="ind" data-ind="upload" title="Uploading attachments">UPL</span>
+                <span class="ind" data-ind="wait" title="Waiting for the reply to start">WAIT</span>
+                <span class="ind" data-ind="stream" title="Reply streaming">STRM</span>
+                <span class="ind" data-ind="settle" title="Reply settling (stable check)">STBL</span>
+                <span class="ind" data-ind="done" title="Reply captured">RX</span>
+                <span class="ind" data-ind="limit" title="Usage limit reached">LIMIT</span>
+                <span class="ind" data-ind="error" title="Error">ERR</span>
+              </div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">ACTIVITY</div>
+              <div class="ai-activity status-info">--</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">MODE</div>
+              <div class="ai-mode status-info">--</div>
             </div>
             <div class="ai-field">
               <div class="ai-field-label">THOUGHTS</div>
@@ -124,6 +158,8 @@
             <span class="ai-timer" data-ai="grok"></span>
             <button class="btn-wait" data-ai="grok" style="display:none;">.WAIT</button>
             <button class="btn-skip" data-ai="grok" style="display:none;">.SKIP</button>
+            <button class="btn-skip btn-retry" data-ai="grok" title="Bring this member back and watch it again" style="display:none;">.RETRY</button>
+            <button class="btn-skip btn-force" data-ai="grok" title="Push past what it is stuck on: stop an upload wait and send, or take the reply on screen now" style="display:none;">.FORCE</button>
           </div>
           <div class="ai-column-body">
             <div class="ai-field ai-login-field">
@@ -133,6 +169,24 @@
             <div class="ai-field">
               <div class="ai-field-label">STATUS</div>
               <div class="ai-status status-info">STANDBY</div>
+              <div class="ai-indicators">
+                <span class="ind" data-ind="tx" title="Typing / sending">TX</span>
+                <span class="ind" data-ind="upload" title="Uploading attachments">UPL</span>
+                <span class="ind" data-ind="wait" title="Waiting for the reply to start">WAIT</span>
+                <span class="ind" data-ind="stream" title="Reply streaming">STRM</span>
+                <span class="ind" data-ind="settle" title="Reply settling (stable check)">STBL</span>
+                <span class="ind" data-ind="done" title="Reply captured">RX</span>
+                <span class="ind" data-ind="limit" title="Usage limit reached">LIMIT</span>
+                <span class="ind" data-ind="error" title="Error">ERR</span>
+              </div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">ACTIVITY</div>
+              <div class="ai-activity status-info">--</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">MODE</div>
+              <div class="ai-mode status-info">--</div>
             </div>
             <div class="ai-field">
               <div class="ai-field-label">THOUGHTS</div>
@@ -159,6 +213,8 @@
             <span class="ai-timer" data-ai="gemini"></span>
             <button class="btn-wait" data-ai="gemini" style="display:none;">.WAIT</button>
             <button class="btn-skip" data-ai="gemini" style="display:none;">.SKIP</button>
+            <button class="btn-skip btn-retry" data-ai="gemini" title="Bring this member back and watch it again" style="display:none;">.RETRY</button>
+            <button class="btn-skip btn-force" data-ai="gemini" title="Push past what it is stuck on: stop an upload wait and send, or take the reply on screen now" style="display:none;">.FORCE</button>
           </div>
           <div class="ai-column-body">
             <div class="ai-field ai-login-field">
@@ -168,6 +224,24 @@
             <div class="ai-field">
               <div class="ai-field-label">STATUS</div>
               <div class="ai-status status-info">STANDBY</div>
+              <div class="ai-indicators">
+                <span class="ind" data-ind="tx" title="Typing / sending">TX</span>
+                <span class="ind" data-ind="upload" title="Uploading attachments">UPL</span>
+                <span class="ind" data-ind="wait" title="Waiting for the reply to start">WAIT</span>
+                <span class="ind" data-ind="stream" title="Reply streaming">STRM</span>
+                <span class="ind" data-ind="settle" title="Reply settling (stable check)">STBL</span>
+                <span class="ind" data-ind="done" title="Reply captured">RX</span>
+                <span class="ind" data-ind="limit" title="Usage limit reached">LIMIT</span>
+                <span class="ind" data-ind="error" title="Error">ERR</span>
+              </div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">ACTIVITY</div>
+              <div class="ai-activity status-info">--</div>
+            </div>
+            <div class="ai-field">
+              <div class="ai-field-label">MODE</div>
+              <div class="ai-mode status-info">--</div>
             </div>
             <div class="ai-field">
               <div class="ai-field-label">THOUGHTS</div>

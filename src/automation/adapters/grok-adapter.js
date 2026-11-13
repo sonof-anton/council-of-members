@@ -28,9 +28,19 @@ class GrokAdapter extends BrowserController {
       // Bare "Grok" speaker label shown above the status line
       if (/^Grok$/i.test(line)) { lines.shift(); continue; }
       if (/^Worked/i.test(line) && line.length < 80) { lines.shift(); continue; }
+      // Collapsed step list: "+2 more", "Ran 3 searches", "Ran command", "Loaded 1 skill"
+      if (/^\+\d+ more$/i.test(line)) { lines.shift(); continue; }
+      if (/^(?:Ran|Loaded|Searched|Read|Browsed|Viewed) \S.*$/i.test(line) && line.length < 60) { lines.shift(); continue; }
       // Strip any short leading line that starts with a gerund (thinking indicator)
       if (/^[A-Z][a-z]+ing\b/i.test(line) && line.length < 80) { lines.shift(); continue; }
       break;
+    }
+    // Agent-mode status lines ("I'll review both files...", "Find project
+    // files") can sit above the ANSWER: header; drop a preamble made only of
+    // short lines. A real preface paragraph is longer and stays.
+    const answerAt = lines.findIndex(l => /^\W*ANSWER\W*:/i.test(l.trim()));
+    if (answerAt > 0 && answerAt <= 15 && lines.slice(0, answerAt).every(l => l.trim().length < 160)) {
+      lines = lines.slice(answerAt);
     }
     return lines.join('\n').trim();
   }

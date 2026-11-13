@@ -1,5 +1,5 @@
-appId: com.counciloais.app
-productName: CouncilOfAIs
+appId: com.councilofmembers.app
+productName: CouncilOfMembers
 directories:
   output: dist
 files:

@@ -27,6 +27,7 @@ FORMAT:
 - If your own answer is concise and you feel it is complete, use your FEEDBACK section extensively — critique, fact-check, and provide detailed feedback. Every member must contribute substantively every round.
 - This runs for up to 10 rounds. Each round is a chance to improve the answer. Participate fully every round.
 - Even if you disagree with the others, provide your own complete detailed answer.
+- Optional: if the council needs information that only an outside source can give (for example a retailer's or a manufacturer's own website chat), add one line — CONSULT: <website address> | <question to ask>. The Chancellor asks it when a majority of members request the same website, and shares the reply with everyone next round.
 
 EXAMPLE:
 ANSWER:
@@ -60,7 +61,24 @@ function usableResponses(responses) {
   );
 }
 
-function formatRelayMessage(responses, round) {
+// consultation: { host, question, reply } from an outside chat, or { host, error }
+function formatConsultation(consultation) {
+  if (!consultation) return '';
+  if (consultation.error) {
+    return `
+=== Outside consultation: ${consultation.host} ===
+The Chancellor could not get a reply (${consultation.error}).
+`;
+  }
+  return `
+=== Outside consultation: ${consultation.host} ===
+Question asked: ${consultation.question}
+Reply:
+${consultation.reply}
+`;
+}
+
+function formatRelayMessage(responses, round, consultation) {
   const prevRound = round - 1;
   let body = `[Round ${round}] [${timestamp()}]
 
@@ -75,6 +93,8 @@ ${responseText}
 `;
   }
 
+  body += formatConsultation(consultation);
+
   body += `
 Now review the other members' answers above and refine your own ANSWER. Incorporate the best points from all responses.
 
@@ -85,7 +105,13 @@ AGREE: YES if you're satisfied this is the best possible answer. AGREE: NO with 
   return body;
 }
 
-function formatUnificationMessage(responses, round) {
+const VOTE_REQUIRED = `REQUIRED: the very last line of your reply must be exactly "AGREE: YES" or "AGREE: NO". A reply without that line counts as no vote and forces another round.`;
+
+// draft: { text, notes: [[aiName, fullResponse], ...] } — after the first
+// unification round, relay one current draft plus any dissent instead of
+// every member's full answer again.
+function formatUnificationMessage(responses, round, draft) {
+  if (draft) return formatDraftReviewMessage(draft, round);
   let body = `[Round ${round}] [${timestamp()}]
 
 All members agree on the substance. Now collaborate to produce one shared final answer.
@@ -104,9 +130,47 @@ ${responseText}
   body += `
 Write a single ANSWER that combines the best elements from all the responses into one comprehensive, unified answer. This should be the best possible version incorporating all members' insights.
 
-AGREE: YES if you're satisfied with the unified version. AGREE: NO if you think it still needs work.`;
+AGREE: YES if you're satisfied with the unified version. AGREE: NO if you think it still needs work.
+
+${VOTE_REQUIRED}`;
 
   return body;
 }
 
-module.exports = { formatInitialMessage, formatRelayMessage, formatUnificationMessage, timestamp };
+function formatDraftReviewMessage(draft, round) {
+  let body = `[Round ${round}] [${timestamp()}]
+
+All members agree on the substance. Here is the current unified draft:
+
+=== Current Draft ===
+${draft.text}
+`;
+
+  for (const [aiName, responseText] of draft.notes || []) {
+    const label = AI_MEMBER_LABELS[aiName] || aiName;
+    body += `
+=== ${label}'s last response (did not vote YES) ===
+${responseText}
+`;
+  }
+
+  body += `
+Review the draft. Your ANSWER must be the complete final answer: the draft unchanged if it is ready, or the draft with your specific corrections applied. Do not rewrite it from scratch or expand it — only fix what is wrong or missing.${(draft.notes || []).length > 0 ? ' Take into account the points raised by any member who did not vote YES.' : ''}
+
+AGREE: YES if the draft (with any fixes you made) is ready. AGREE: NO with what still needs to change.
+
+${VOTE_REQUIRED}`;
+
+  return body;
+}
+
+// The CONSTITUTION exactly as written in this file, for the Chancellor's
+// display — read from source so the display can never drift from what the
+// members are actually sent.
+function getConstitutionSource() {
+  const src = require('fs').readFileSync(__filename, 'utf-8');
+  const m = src.match(/^const CONSTITUTION = `[\s\S]*?`;/m);
+  return m ? m[0].replace(/\r\n/g, '\n') : 'const CONSTITUTION = ' + JSON.stringify(CONSTITUTION) + ';';
+}
+
+module.exports = { formatInitialMessage, formatRelayMessage, formatUnificationMessage, getConstitutionSource, timestamp };

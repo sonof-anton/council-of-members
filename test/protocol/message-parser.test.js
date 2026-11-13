@@ -2,7 +2,7 @@
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { parseResponse, extractVote, extractSections, extractConsensusAnswer } = require('../../src/protocol/message-parser.js');
+const { parseResponse, extractVote, extractSections, extractConsult, extractConsensusAnswer } = require('../../src/protocol/message-parser.js');
 
 describe('extractVote', () => {
   it('should detect YES vote', () => {
@@ -20,6 +20,47 @@ describe('extractVote', () => {
 
   it('should return null when no vote', () => {
     assert.equal(extractVote('Some text without a vote'), null);
+  });
+
+  it('should accept the wider vote syntax', () => {
+    assert.equal(extractVote('**AGREEMENT: no**'), 'NO');
+    assert.equal(extractVote('AGREED: YES'), 'YES');
+    assert.equal(extractVote('Consensus: ✅'), 'YES');
+    assert.equal(extractVote('AGREE: ❌ — needs work'), 'NO');
+    assert.equal(extractVote('AGREE: Y'), 'YES');
+    assert.equal(extractVote('VOTE = TRUE'), 'YES');
+    assert.equal(extractVote('AGREE: NAY'), 'NO');
+    assert.equal(extractVote('AGREE [YES]'), 'YES');
+  });
+
+  it('should not read a vote out of a longer word', () => {
+    assert.equal(extractVote('AGREE: Yesterday was fine'), null);
+    assert.equal(extractVote('AGREE: NOT YET'), null);
+  });
+});
+
+describe('extractConsult', () => {
+  it('should read a CONSULT line with a bare domain', () => {
+    assert.deepEqual(extractConsult('ANSWER:\nx\n\nCONSULT: homedepot.com | Is the DCD800 in stock?\n\nAGREE: NO'),
+      { url: 'https://homedepot.com/', host: 'homedepot.com', question: 'Is the DCD800 in stock?' });
+  });
+
+  it('should accept markdown, a full URL and a dash separator', () => {
+    assert.deepEqual(extractConsult('- **CONSULT:** https://www.bosch.com/support - what torque?'),
+      { url: 'https://www.bosch.com/support', host: 'bosch.com', question: 'what torque?' });
+  });
+
+  it('should ignore lines without a website and a question', () => {
+    assert.equal(extractConsult('CONSULT: none'), null);
+    assert.equal(extractConsult('CONSULT: nothing | needed'), null);
+    assert.equal(extractConsult('We could CONSULT: acme.com | q mid-sentence'), null);
+    assert.equal(extractConsult('ANSWER: no consult here'), null);
+  });
+
+  it('should keep the CONSULT line out of the ANSWER section', () => {
+    const parsed = parseResponse('ANSWER: hello\nCONSULT: acme.com | q\nAGREE: NO');
+    assert.equal(parsed.sections.ANSWER, 'hello');
+    assert.equal(parsed.consult.host, 'acme.com');
   });
 });
 

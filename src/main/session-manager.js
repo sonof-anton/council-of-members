@@ -10,7 +10,7 @@ const partitions = {
 
 function getSession(aiName) {
   const partition = partitions[aiName];
-  if (!partition) throw new Error(`Unknown AI: ${aiName}`);
+  if (!partition) throw new Error(`Unknown member: ${aiName}`);
   return session.fromPartition(partition);
 }
 

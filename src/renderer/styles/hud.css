@@ -290,7 +290,8 @@ button:active {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  /* Short windows: the fields scroll rather than squeezing RESPONSE away */
+  overflow-y: auto;
   font-size: 12px;
   min-height: 0;
 }
@@ -304,7 +305,7 @@ button:active {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-height: 180px;
   margin-bottom: 0;
   overflow: hidden;
 }
@@ -641,4 +642,197 @@ button:active {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--green);
+}
+
+/* === LOGIN TAB (shrinks once every member is logged in) === */
+#view-switcher button.login-ok {
+  flex: 0 0 90px;
+  color: var(--dim-green);
+}
+
+#view-switcher button.login-ok.active {
+  color: var(--green);
+}
+
+#view-switcher button.login-needed {
+  color: var(--red);
+}
+
+/* === MODE BAR (Level 1) === */
+#mode-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+.mode-bar-label {
+  color: var(--dim-green);
+}
+
+.btn-preset,
+.mode-current {
+  padding: 3px 8px;
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+.btn-preset:disabled,
+.mode-current:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.mode-member {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mode-member-label {
+  color: var(--blue);
+}
+
+.mode-current {
+  color: var(--blue);
+  text-transform: none;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mode-current.busy {
+  color: var(--yellow);
+}
+
+.mode-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  min-width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--green);
+  padding: 4px;
+  color: var(--yellow);
+}
+
+.mode-menu.open {
+  display: block;
+}
+
+.mode-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  padding: 3px 6px;
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: pre;
+}
+
+.mode-option.checked {
+  color: var(--yellow);
+}
+
+.mode-option:disabled {
+  color: var(--dim-green);
+  cursor: default;
+}
+
+/* === OUTSIDE CONSULTATION === */
+#consult-panel {
+  display: none;
+  border: 1px solid var(--blue);
+  padding: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+#consult-panel.visible {
+  display: block;
+}
+
+#consult-header {
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+}
+
+#consult-question {
+  color: var(--blue);
+  white-space: pre-wrap;
+}
+
+#consult-activity {
+  color: var(--yellow);
+  font-style: italic;
+}
+
+#consult-reply {
+  color: var(--green);
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+#status-consult {
+  font-size: 11px;
+}
+
+#btn-advance {
+  border: 1px solid var(--yellow);
+  color: var(--yellow);
+  padding: 2px 8px;
+  font-size: 10px;
+}
+
+/* === LEVEL 2 ACTIVITY + INDICATORS === */
+.ai-activity,
+.ai-mode {
+  font-size: 11px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-indicators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.ind {
+  font-size: 9px;
+  letter-spacing: 1px;
+  padding: 1px 4px;
+  border: 1px solid #002200;
+  color: #003300;
+}
+
+.ind.on {
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
+
+.ind[data-ind="done"].on {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.ind[data-ind="limit"].on,
+.ind[data-ind="error"].on {
+  border-color: var(--red);
+  color: var(--red);
 }

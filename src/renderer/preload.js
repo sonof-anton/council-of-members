@@ -12,9 +12,17 @@ contextBridge.exposeInMainWorld('council', {
   diagnose: () => ipcRenderer.invoke('council:diagnose'),
   skipMember: (name) => ipcRenderer.invoke('council:skip-member', name),
   waitMember: (name) => ipcRenderer.invoke('council:wait-member', name),
+  retryMember: (name) => ipcRenderer.invoke('council:retry-member', name),
+  forceMember: (name) => ipcRenderer.invoke('council:force-member', name),
   deepProbe: () => ipcRenderer.invoke('council:deep-probe'),
   navBack: (name) => ipcRenderer.invoke('council:nav-back', name),
   navForward: (name) => ipcRenderer.invoke('council:nav-forward', name),
+  advanceRound: () => ipcRenderer.invoke('council:advance-round'),
+  getConstitution: () => ipcRenderer.invoke('council:get-constitution'),
+  getModes: () => ipcRenderer.invoke('council:get-modes'),
+  listModes: (name) => ipcRenderer.invoke('council:list-modes', name),
+  selectMode: (name, optionText) => ipcRenderer.invoke('council:select-mode', name, optionText),
+  applyModePreset: (preset) => ipcRenderer.invoke('council:apply-mode-preset', preset),
 
   onLoginStatus: (cb) => {
     const listener = (_e, data) => cb(data);
@@ -66,6 +74,21 @@ contextBridge.exposeInMainWorld('council', {
     const listener = (_e, data) => cb(data);
     ipcRenderer.on('council:perf-update', listener);
     return () => ipcRenderer.removeListener('council:perf-update', listener);
+  },
+  onMemberActivity: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('council:member-activity', listener);
+    return () => ipcRenderer.removeListener('council:member-activity', listener);
+  },
+  onConsultStatus: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('council:consult-status', listener);
+    return () => ipcRenderer.removeListener('council:consult-status', listener);
+  },
+  onModes: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('council:modes', listener);
+    return () => ipcRenderer.removeListener('council:modes', listener);
   },
   onIndividualConsensus: (cb) => {
     const listener = (_e, data) => cb(data);
