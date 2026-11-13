@@ -1,6 +1,7 @@
 'use strict';
 
 const { EventEmitter } = require('events');
+const { logDir: getLogDir } = require('../utils/paths.js');
 const fs = require('fs');
 const path = require('path');
 const { AI_NAMES, AI_LABELS, MAX_ROUNDS, MIN_CONSENSUS_MEMBERS, MAX_CONSULTS_PER_SESSION, PHASES, RESPONSE_TIMEOUT_MS, RESPONSE_TIMEOUT_PER_MEMBER, TX_TIMEOUT_MS, TX_TIMEOUT_PER_1K_MS, SITE_ERROR_RETRIES, ATTACH_TIMEOUT_MS } = require('../utils/constants.js');
@@ -66,7 +67,7 @@ class Router extends EventEmitter {
 
   initTranscript(prompt) {
     try {
-      const logDir = path.join(process.cwd(), 'logs');
+      const logDir = getLogDir();
       if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
       const ts = new Date().toISOString().replace(/[:.]/g, '-');
       this.transcriptFile = path.join(logDir, `transcript-${ts}.log`);

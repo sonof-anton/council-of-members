@@ -2,13 +2,14 @@
 
 const fs = require('fs');
 const path = require('path');
+const { logDir: getLogDir } = require('./paths.js');
 
 let logFile = null;
 
 function initLogFile() {
   if (logFile) return;
   try {
-    const logDir = path.join(process.cwd(), 'logs');
+    const logDir = getLogDir();
     if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
     logFile = path.join(logDir, `council-${ts}.log`);

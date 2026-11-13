@@ -3,6 +3,7 @@
 const { app, BrowserWindow } = require('electron');
 const WindowManager = require('./window-manager.js');
 const { registerIpcHandlers } = require('./ipc-handlers.js');
+const { initAutoUpdate } = require('./updater.js');
 
 let mainWindow;
 let windowManager;
@@ -23,6 +24,8 @@ function createWindow() {
   registerIpcHandlers(mainWindow, windowManager);
 
   mainWindow.on('resize', () => windowManager.layout());
+
+  initAutoUpdate(mainWindow);
 }
 
 // A second copy would share the persist:* login partitions with the first

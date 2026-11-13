@@ -4,7 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const { log } = require('./logger.js');
 
-const PERF_FILE = path.join(process.cwd(), 'logs', 'perf-stats.json');
+const { logDir } = require('./paths.js');
+
+const PERF_FILE = path.join(logDir(), 'perf-stats.json');
 
 class PerfTracker {
   constructor() {

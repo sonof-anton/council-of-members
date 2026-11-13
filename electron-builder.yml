@@ -15,3 +15,11 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+# Auto-update: installed copies check these GitHub Releases on launch.
+# `npm run release` (with GH_TOKEN set) builds and publishes a new one;
+# bump "version" in package.json first or no device will see it as newer.
+publish:
+  provider: github
+  owner: GITHUB_OWNER
+  repo: council-of-members
+  releaseType: release
